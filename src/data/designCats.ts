@@ -1,0 +1,38 @@
+// 自动生成：设计部分类图库（改分类请调整 素材待放/设计部/ 子文件夹后重跑脚本）
+import type { PhotoCategory } from "./photographyCats";
+export const designCategories: PhotoCategory[] = [
+  { name: "门票设计", images: [
+    "/assets/design/c1/d01.jpg",
+    "/assets/design/c1/d02.jpg",
+    "/assets/design/c1/d03.png",
+    "/assets/design/c1/d04.png",
+    "/assets/design/c1/d05.png",
+    "/assets/design/c1/d06.jpg",
+    "/assets/design/c1/d07.jpg",
+    "/assets/design/c1/d08.jpg",
+    "/assets/design/c1/d09.jpg",
+    "/assets/design/c1/d10.jpg",
+  ]},
+  { name: "海报", images: [
+    "/assets/design/c2/d01.jpg",
+    "/assets/design/c2/d02.png",
+    "/assets/design/c2/d03.png",
+    "/assets/design/c2/d04.jpg",
+    "/assets/design/c2/d05.jpg",
+    "/assets/design/c2/d06.jpg",
+    "/assets/design/c2/d07.jpg",
+    "/assets/design/c2/d08.jpg",
+    "/assets/design/c2/d09.jpg",
+    "/assets/design/c2/d10.jpg",
+    "/assets/design/c2/d11.png",
+    "/assets/design/c2/d12.jpg",
+    "/assets/design/c2/d13.jpg",
+    "/assets/design/c2/d14.jpg",
+    "/assets/design/c2/d15.png",
+    "/assets/design/c2/d16.png",
+    "/assets/design/c2/d17.jpg",
+    "/assets/design/c2/d18.jpg",
+    "/assets/design/c2/d19.jpg",
+    "/assets/design/c2/d20.jpg",
+  ]},
+];

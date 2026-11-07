@@ -1,0 +1,44 @@
+# deps / build
+node_modules/
+dist/
+.cache/
+.parcel-cache/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# 预览截图 / playwright 产物（根目录 jpeg 都是我的截图，不进仓库）
+.playwright-mcp/
+/*.jpeg
+/*.jpg
+
+# 说明：public/assets/video/ 下是已压缩的部署用视频（总 ~25MB），保留进 git 以便一键部署
+
+# GitHub 仅保存实际使用的 public/assets，原始大素材留在本地
+/素材待放/
+/*.mp4
+/ossutil64/
+/ossutil64.zip
+.claude/
+.wrangler/
+.env
+.env.*
+
+# Windows 保留名垃圾文件
+/nul
+.spec-workflow/
+
+# tsc/vite 构建产物
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+ossutil.exe
+ossutilconfig*
+
+# HTTPS renewal keys and local Python bytecode
+.certificates/
+__pycache__/
