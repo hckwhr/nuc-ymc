@@ -16,11 +16,13 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from .passwords import hash_password, verify_password
+from .migrations import migrate_departments
 from .settings import Settings
 from .storage import Storage, clean_image
 
 CONSENT_VERSION = "2026-11-18"
 SESSION_SECONDS = 12 * 3600
+CATEGORIES = json.loads(Path(__file__).with_name("categories.json").read_text(encoding="utf-8"))
 class LoginRequest(BaseModel):
     username: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_]{3,31}$")
     password: str = Field(min_length=1, max_length=128)
@@ -81,6 +83,7 @@ def create_app(settings: Settings | None = None):
         owner = connection.execute("SELECT username FROM users WHERE role='owner'").fetchone()
         if owner and owner["username"] != settings.owner_username:
             raise ValueError("OWNER_USERNAME differs from the existing owner; use a reviewed account migration")
+    migrate_departments(database)
 
     app = FastAPI(title="青年媒体中心", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db = db
@@ -285,12 +288,16 @@ def create_app(settings: Settings | None = None):
         return {"items": [serialize_work(connection, row, private) for row in rows], "total": count, "page": page}
 
     @app.get("/api/works")
-    def works(page: int = 1, category: str = ""):
-        if page < 1 or page > 100000 or category not in {"", "photography", "design"}:
+    def works(page: int = 1, category: str = "", branch: str = ""):
+        if page < 1 or page > 100000 or (category and category not in CATEGORIES):
             raise HTTPException(422, "无效筛选条件")
+        if branch and (not category or branch not in CATEGORIES[category]["branches"]):
+            raise HTTPException(422, "请选择该部门下的有效分支")
         where, params = "w.status='approved' AND u.disabled=0", ()
         if category:
             where, params = where + " AND w.category=?", (category,)
+        if branch:
+            where, params = where + " AND w.branch=?", (*params, branch)
         with db() as connection:
             return list_works(connection, where, params, page, False)
 
@@ -304,10 +311,12 @@ def create_app(settings: Settings | None = None):
     @app.post("/api/works", status_code=201)
     async def upload(request: Request, title: str = Form(min_length=1, max_length=100),
                      description: str = Form(default="", max_length=2000),
-                     category: str = Form(), rights: bool = Form(), files: list[UploadFile] = File(),
+                     category: str = Form(), branch: str = Form(default="其他"), rights: bool = Form(), files: list[UploadFile] = File(),
                      user=Depends(current_user)):
-        if category not in {"photography", "design"} or not rights or not title.strip():
+        if category not in CATEGORIES or not rights or not title.strip():
             raise HTTPException(422, "请填写标题、分类并确认作品授权")
+        if branch not in CATEGORIES[category]["branches"]:
+            raise HTTPException(422, "请选择该部门下的有效分支")
         if not 1 <= len(files) <= 6:
             raise HTTPException(422, "每件作品需要 1 至 6 张图片")
         with db(write=True) as connection:
@@ -339,20 +348,20 @@ def create_app(settings: Settings | None = None):
                     count = connection.execute("SELECT COUNT(*) FROM works WHERE user_id=? AND status!='deleted'", (user["id"],)).fetchone()[0]
                     if count >= 100:
                         raise HTTPException(409, "最多保留 100 件作品，请先删除不需要的投稿")
-                    connection.execute("INSERT INTO works VALUES(?,?,?,?,?,'pending','',?,?)",
-                                       (work_id, user["id"], title.strip(), description.strip(), category, now(), now()))
+                    connection.execute("INSERT INTO works VALUES(?,?,?,?,?,'pending','',?,?,?)",
+                                       (work_id, user["id"], title.strip(), description.strip(), category, now(), now(), branch))
                     for index, data in enumerate(images):
                         image_id = str(uuid.uuid4())
                         key = f"community/{work_id}/{image_id}.jpg"
                         keys.append((image_id, key, index, len(data)))
                         storage.put(key, data)
                         connection.execute("INSERT INTO images VALUES(?,?,?,?,?,0)", (image_id, work_id, key, index, len(data)))
-                    audit(connection, user["id"], "upload", work_id, title.strip())
+                    audit(connection, user["id"], "upload", work_id, f"{title.strip()} · {CATEGORIES[category]['name']} / {branch}")
             except Exception:
                 if keys:
                     with db(write=True) as connection:
-                        connection.execute("INSERT OR IGNORE INTO works VALUES(?,?,?,?,?,'deleted','上传失败',?,?)",
-                                           (work_id, user["id"], title.strip(), "", category, now(), now()))
+                        connection.execute("INSERT OR IGNORE INTO works VALUES(?,?,?,?,?,'deleted','上传失败',?,?,?)",
+                                           (work_id, user["id"], title.strip(), "", category, now(), now(), branch))
                         for image_id, key, index, size in keys:
                             connection.execute("INSERT OR IGNORE INTO images VALUES(?,?,?,?,?,0)", (image_id, work_id, key, index, size))
                 raise
@@ -438,10 +447,20 @@ def create_app(settings: Settings | None = None):
         return {"ok": True}
 
     @app.get("/api/admin/works")
-    def admin_works(status: str = "", user_id: str = "", page: int = 1, user=Depends(administrator)):
+    def admin_works(status: str = "", user_id: str = "", page: int = 1, category: str = "", branch: str = "", user=Depends(administrator)):
         if status not in {"", "pending", "approved", "rejected", "deleted"} or page < 1 or page > 100000:
             raise HTTPException(422, "无效查询条件")
         where, params = ["1=1"], []
+        if category and category not in CATEGORIES:
+            raise HTTPException(422, "无效部门")
+        if branch and (not category or branch not in CATEGORIES[category]["branches"]):
+            raise HTTPException(422, "无效分支")
+        if category:
+            where.append("w.category=?")
+            params.append(category)
+        if branch:
+            where.append("w.branch=?")
+            params.append(branch)
         if status:
             where.append("w.status=?")
             params.append(status)

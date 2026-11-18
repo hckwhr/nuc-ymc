@@ -1,14 +1,18 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, API, CONSENT, dateText, roleName, statusName, useAuth, type Page, type Work } from "../lib/community";
+import { SubmissionTree, DepartmentFilters, departments, type Department } from "../components/SubmissionTree";
+import { logoSrc } from "../data/media";
 import "../community.css";
 
 export function CommunityLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [error, setError] = useState("");
   return <div className="community-shell">
-    <header className="community-header"><Link to="/" className="community-brand">青年媒体中心</Link><nav aria-label="创作导航">
-      <Link to="/community">作品社区</Link><Link to="/account">{user ? "我的作品" : "登录 / 投稿"}</Link>
+    <header className="community-header"><Link to="/" className="community-brand"><img src={logoSrc} alt="" />青年媒体中心</Link><nav aria-label="创作导航">
+      <Link to="/community">作品社区</Link><Link to="/account">{user ? "投稿 / 我的作品" : "登录"}</Link>
+      {!user && <Link className="header-register" to="/account?mode=register">注册账号</Link>}
+      {user && <span className="header-identity">@{user.username}</span>}
       {user && user.role !== "user" && <Link to="/admin">管理后台</Link>}
       {user && <button onClick={() => void logout().catch(e => setError(e.message))}>退出登录</button>}
     </nav></header>
@@ -25,7 +29,7 @@ export function WorkCard({ work, children }: { work: Work; children?: ReactNode 
   const [expanded, setExpanded] = useState(false);
   return <article className="work-card">
     {work.images.length > 0 && <button className="work-cover" onClick={() => setExpanded(true)} aria-label={`查看 ${work.title}`}><img src={`${API}/api/images/${work.images[0]}`} alt={work.title} loading="lazy" /></button>}
-    <div className="work-content"><div className="work-meta"><span>{work.category === "photography" ? "摄影" : "设计"}</span><span className={`status ${work.status}`}>{statusName[work.status]}</span></div>
+    <div className="work-content"><div className="work-meta"><span>{departments[work.category as Department]?.name || work.category} · {work.branch || "其他"}</span><span className={`status ${work.status}`}>{statusName[work.status]}</span></div>
       <h2>{work.title}</h2><p className="muted">{work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
       {work.reason && <p className="notice">处理说明 · {work.reason}</p>}{children}</div>
     {expanded && <div className="image-dialog" role="dialog" aria-modal="true" aria-label={work.title} onKeyDown={e => { if (e.key === "Escape") setExpanded(false); }}>
@@ -36,33 +40,39 @@ export function WorkCard({ work, children }: { work: Work; children?: ReactNode 
 
 export default function Community() {
   const [data, setData] = useState<Page<Work>>({ items: [], total: 0, page: 1 });
-  const [page, setPage] = useState(1), [category, setCategory] = useState("");
+  const [page, setPage] = useState(1), [category, setCategory] = useState(""), [branch, setBranch] = useState("");
   const [error, setError] = useState(""), [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true; setLoading(true); setError("");
-    api<Page<Work>>(`/works?page=${page}&category=${category}`).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
+    api<Page<Work>>(`/works?page=${page}&category=${category}&branch=${encodeURIComponent(branch)}`).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, category]);
-  return <CommunityLayout><div className="page-heading"><div><p className="eyebrow">校园创作</p><h1>让作品被看见</h1><p className="muted">分享摄影与设计，记录你眼中的校园。</p></div><Link className="primary button" to="/account">上传我的作品</Link></div>
-    <div className="filter-row"><label>作品分类 <select value={category} onChange={e => { setCategory(e.target.value); setPage(1); }}><option value="">全部作品</option><option value="photography">摄影</option><option value="design">设计</option></select></label></div>
+  }, [page, category, branch]);
+  return <CommunityLayout><div className="page-heading"><div><p className="eyebrow">校园创作</p><h1>让作品被看见</h1><p className="muted">汇集摄影、设计与抖音部的创作，记录你眼中的校园。</p></div><Link className="primary button" to="/account">上传我的作品</Link></div>
+    <DepartmentFilters category={category} branch={branch} onChange={(category, branch) => { setCategory(category); setBranch(branch); setPage(1); }} />
     {error && <p className="notice error" role="alert">{error}</p>}{loading ? <p role="status">正在加载作品…</p> : <><div className="works-grid">{data.items.map(work => <WorkCard key={work.id} work={work} />)}</div>{!error && data.total === 0 && <div className="empty-state">还没有公开投稿，期待你的第一件作品。</div>}<Pagination page={page} total={data.total} change={setPage} /></>}
   </CommunityLayout>;
 }
 
 export function LoginForm() {
   const { login } = useAuth();
-  const [register, setRegister] = useState(false), [username, setUsername] = useState(""), [password, setPassword] = useState("");
+  const [params, setParams] = useSearchParams();
+  const register = params.get("mode") === "register";
+  const [confirm, setConfirm] = useState("");
+  const [username, setUsername] = useState(""), [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault(); setError("");
+    if (register && password !== confirm) { setError("两次密码不一致，请重新确认"); return; }
+    setBusy(true);
     try { await login(username, password, register); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
-  return <section className="login-panel"><p className="eyebrow">欢迎加入</p><h1>{register ? "创建账号" : "登录创作空间"}</h1>
+  return <section className="login-panel"><div className="auth-tabs" aria-label="账号入口"><button type="button" aria-pressed={!register} onClick={() => { setParams({}); setError(""); }}>登录</button><button type="button" aria-pressed={register} onClick={() => { setParams({ mode: "register" }); setError(""); }}>注册账号</button></div><p className="eyebrow">欢迎加入</p><h1>{register ? "起一个属于你的用户名" : "欢迎回到创作空间"}</h1><p className="muted">{register ? "注册成功即可投稿，无需等待账号审核。" : "用注册时设置的用户名和密码登录。"}</p>
     <form onSubmit={submit}><label>用户名<input autoComplete="username" required pattern="[a-zA-Z][a-zA-Z0-9_]{3,31}" maxLength={32} value={username} onChange={e => setUsername(e.target.value)} /><small>4 至 32 位，以字母开头，可含数字和下划线，不区分大小写。</small></label>
     <label>密码<input type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 12 : 1} maxLength={128} value={password} onChange={e => setPassword(e.target.value)} />{register && <small>至少 12 个字符，建议使用独立的长密码。</small>}</label>
+    {register && <label>确认密码<input type="password" autoComplete="new-password" required minLength={12} maxLength={128} value={confirm} onChange={e => setConfirm(e.target.value)} /></label>}
     {register && <label className="checkbox-label"><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>我已阅读并同意<Link to="/privacy" target="_blank">隐私说明与投稿规则</Link>。</span></label>}
     {error && <p className="notice error" role="alert">{error}</p>}<button className="primary" disabled={busy || (register && !consent)}>{busy ? "正在处理…" : register ? "注册并登录" : "登录"}</button>
-    <button type="button" onClick={() => { setRegister(!register); setError(""); setPassword(""); }}>{register ? "已有账号，去登录" : "还没有账号，注册"}</button>
+    <button type="button" onClick={() => { setParams(register ? {} : { mode: "register" }); setError(""); setPassword(""); setConfirm(""); }}>{register ? "已有账号，去登录" : "还没有账号，注册"}</button>
     <small>忘记密码请联系网站运营方核实身份后重置。</small></form></section>;
 }
 
@@ -83,32 +93,20 @@ export function Account() {
   const { user, loading, error: serviceError, refresh } = useAuth();
   const [works, setWorks] = useState<Page<Work>>({ items: [], total: 0, page: 1 }), [page, setPage] = useState(1), [version, setVersion] = useState(0);
   const [error, setError] = useState(""), [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [nickname, setNickname] = useState("");
-  const [files, setFiles] = useState<File[]>([]), [previews, setPreviews] = useState<string[]>([]);
   useEffect(() => { setNickname(user?.nickname || ""); }, [user?.nickname]);
   useEffect(() => { if (!user || user.must_change_password) return; let active = true; api<Page<Work>>(`/my/works?page=${page}`).then(data => { if (active) setWorks(data); }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, [user?.id, user?.must_change_password, page, version]);
-  useEffect(() => { const urls = files.map(file => URL.createObjectURL(file)); setPreviews(urls); return () => urls.forEach(URL.revokeObjectURL); }, [files]);
-  async function upload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; setError(""); setMessage("");
-    if (!files.length || files.length > 6 || files.some(file => file.size > 8 * 1024 * 1024)) { setError("请选择 1 至 6 张图片，每张不超过 8 MB"); return; }
-    setBusy(true);
-    try { await api("/works", { method: "POST", body: new FormData(form) }); form.reset(); setFiles([]); setVersion(v => v + 1); setPage(1); setMessage("作品提交成功，审核结果将在下方显示。"); }
-    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
   async function remove(work: Work) {
     if (!window.confirm(`确定删除《${work.title}》？删除后作品将无法访问。`)) return;
     setBusy(true); setError("");
     try { await api(`/works/${work.id}`, { method: "DELETE" }); setVersion(v => v + 1); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <CommunityLayout>{loading ? <p>正在确认登录状态…</p> : !user ? <>{serviceError && <p className="notice error">{serviceError}</p>}<LoginForm /></> : user.must_change_password ? <PasswordForm /> : <>
-    <div className="page-heading"><div><p className="eyebrow">{roleName[user.role]}</p><h1>我的创作空间</h1><p className="muted">{user.username}</p></div>{user.role !== "user" && <Link className="button" to="/admin">进入管理后台</Link>}</div>
-    <form className="profile-form" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await api("/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }); await refresh(); setMessage("昵称已更新"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label>公开昵称<input value={nickname} required maxLength={32} onChange={e => setNickname(e.target.value)} /></label><button disabled={busy}>保存昵称</button></form>
-    <section className="upload-panel"><h2>上传作品</h2><p className="muted">每件作品 1 至 6 张 JPG、PNG 或 WebP 图片，每张最大 8 MB。审核通过后公开。</p><form onSubmit={upload}>
-      <div className="form-columns"><label>作品标题<input name="title" required maxLength={100} /></label><label>作品分类<select name="category"><option value="photography">摄影</option><option value="design">设计</option></select></label></div>
-      <label>作品简介<textarea name="description" maxLength={2000} rows={3} /></label><label className="file-zone">选择图片<input name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required onChange={e => setFiles(Array.from(e.target.files || []))} /></label>
-      <div className="upload-previews">{previews.map((src, index) => <img key={src} src={src} alt={`待上传图片 ${index + 1}`} />)}</div>
-      <label className="checkbox-label"><input type="checkbox" name="rights" value="true" required /><span>我拥有作品版权或已获授权，并同意投稿规则。</span></label><button className="primary" disabled={busy}>{busy ? "正在提交，请稍候…" : "提交审核"}</button>
-    </form></section>{error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
-    <details><summary>账号安全 · 修改密码</summary><PasswordForm /></details><h2 className="section-title">我的作品</h2><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button>}</WorkCard>)}</div>{works.total === 0 && <p className="empty-state">你的投稿和审核结果会显示在这里。</p>}<Pagination page={page} total={works.total} change={setPage} />
+    <div className="page-heading"><div><p className="eyebrow">{roleName[user.role]}</p><h1>我的创作空间</h1><p className="account-identity">登录用户名 <strong>@{user.username}</strong><span>公开昵称 · {user.nickname}</span></p></div>{user.role !== "user" && <Link className="button" to="/admin">进入管理后台</Link>}</div>
+    <details className="account-settings"><summary>个人资料与账号安全</summary><form className="profile-form" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await api("/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }); await refresh(); setMessage("昵称已更新"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label>公开昵称<input value={nickname} required maxLength={32} onChange={e => setNickname(e.target.value)} /></label><button disabled={busy}>保存昵称</button></form>
+    <PasswordForm /></details>
+    <SubmissionTree onSubmitted={() => { setVersion(v => v + 1); setPage(1); }} />
+    {error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
+    <h2 className="section-title">我的作品</h2><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button>}</WorkCard>)}</div>{works.total === 0 && <p className="empty-state">你的投稿和审核结果会显示在这里。</p>}<Pagination page={page} total={works.total} change={setPage} />
   </>}</CommunityLayout>;
 }
 

@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/#recruit", label: "招新" },
   { href: "/#contact", label: "联系我们" },
   { href: "/account", label: "登录 / 投稿" },
+  { href: "/account?mode=register", label: "注册" },
 ];
 
 export function Navbar() {

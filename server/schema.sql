@@ -16,9 +16,10 @@ CREATE TABLE IF NOT EXISTS login_events (
 );
 CREATE TABLE IF NOT EXISTS works (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL,
- description TEXT NOT NULL, category TEXT NOT NULL CHECK(category IN ('photography','design')),
+ description TEXT NOT NULL, category TEXT NOT NULL CHECK(category IN ('photography','design','douyin')),
  status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected','deleted')),
- reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+ reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+ branch TEXT NOT NULL DEFAULT '其他'
 );
 CREATE TABLE IF NOT EXISTS images (
  id TEXT PRIMARY KEY, work_id TEXT NOT NULL REFERENCES works(id), object_key TEXT NOT NULL UNIQUE,

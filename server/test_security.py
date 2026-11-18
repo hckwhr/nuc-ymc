@@ -1,5 +1,6 @@
 import io
 import tempfile
+import sqlite3
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from PIL import Image
 from server.app import CONSENT_VERSION, create_app
 from server.passwords import hash_password
 from server.settings import Settings
+from server.migrations import migrate_departments
 
 
 class SecurityTests(unittest.TestCase):
@@ -97,6 +99,47 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/admin/users').status_code, 403)
         self.assertEqual(self.client.post('/api/auth/password', json={"current_password": "Owner-password-123", "password": "Owner-new-password-456"}).status_code, 200)
         self.assertEqual(self.client.get('/api/admin/users').status_code, 200)
+
+    def test_department_branches_and_filters(self):
+        self.register(self.client, 'creator1')
+        picture = io.BytesIO()
+        Image.new('RGB', (20, 20), 'blue').save(picture, 'PNG')
+        data = {'title': '分镜', 'category': 'douyin', 'branch': '创意短片', 'rights': 'true'}
+        response = self.client.post('/api/works', data=data, files={'files': ('frame.png', picture.getvalue(), 'image/png')})
+        self.assertEqual(response.status_code, 201, response.text)
+        work = self.client.get('/api/my/works').json()['items'][0]
+        self.assertEqual(work['branch'], '创意短片')
+        owner = self.new_client()
+        self.login(owner, 'hck_admin', 'Owner-password-123')
+        self.assertEqual(owner.get('/api/admin/works?category=douyin&branch=创意短片').json()['total'], 1)
+        self.assertEqual(owner.get('/api/admin/works?category=design').json()['total'], 0)
+        owner.patch('/api/admin/works/' + work['id'], json={'status': 'approved'})
+        self.assertEqual(self.client.get('/api/works?category=douyin&branch=创意短片').json()['total'], 1)
+        data['branch'] = '门票设计'
+        response = self.client.post('/api/works', data=data, files={'files': ('frame.png', picture.getvalue(), 'image/png')})
+        self.assertEqual(response.status_code, 422)
+        owner.close()
+
+    def test_existing_works_migrate_with_images_intact(self):
+        path = Path(self.temp.name) / 'old.sqlite3'
+        with sqlite3.connect(path) as db:
+            db.executescript("""
+                CREATE TABLE users(id TEXT PRIMARY KEY);
+                INSERT INTO users VALUES('existing-user');
+                CREATE TABLE works(id TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),title TEXT,description TEXT,
+                    category TEXT CHECK(category IN ('photography','design')),status TEXT,reason TEXT,created_at INTEGER,updated_at INTEGER);
+                INSERT INTO works VALUES('existing-work','existing-user','旧作品','','photography','approved','',1,1);
+                CREATE TABLE images(id TEXT PRIMARY KEY,work_id TEXT REFERENCES works(id));
+                INSERT INTO images VALUES('existing-image','existing-work');
+            """)
+        db.close()
+        migrate_departments(path)
+        migrate_departments(path)
+        with sqlite3.connect(path) as db:
+            self.assertEqual(db.execute('SELECT title,branch FROM works').fetchone(), ('旧作品', '其他'))
+            self.assertEqual(db.execute('SELECT work_id FROM images').fetchone()[0], 'existing-work')
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+        db.close()
 
 
 if __name__ == '__main__':
