@@ -19,6 +19,7 @@ from .passwords import hash_password, verify_password
 from .migrations import migrate_departments
 from .settings import Settings
 from .storage import Storage, clean_image
+from .study import register_study
 
 CONSENT_VERSION = "2026-11-18"
 SESSION_SECONDS = 12 * 3600
@@ -122,7 +123,8 @@ def create_app(settings: Settings | None = None):
     app.state.storage = storage
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.origins), allow_credentials=True,
                        allow_methods=["GET", "POST", "PATCH", "DELETE"],
-                       allow_headers=["Content-Type", "X-CSRF-Token"])
+                       allow_headers=["Content-Type", "X-CSRF-Token", "Range"],
+                       expose_headers=["Accept-Ranges", "Content-Length", "Content-Range", "Content-Disposition"])
     secure = settings.environment == "production"
     cookie_name = "__Host-ymc_session" if secure else "ymc_session"
 
@@ -209,6 +211,7 @@ def create_app(settings: Settings | None = None):
         return response
 
     dummy_hash = hash_password(secrets.token_urlsafe(32))
+    register_study(app, db, storage, current_user, full_administrator, audit, limited, now)
     upload_lock = asyncio.Lock()
 
     @app.get("/api/health")
@@ -708,11 +711,11 @@ def create_app(settings: Settings | None = None):
         with db() as connection:
             params = (f"%{q}%", f"%{q}%")
             count = connection.execute("SELECT COUNT(*) FROM users WHERE username LIKE ? OR nickname LIKE ?", params).fetchone()[0]
-            rows = connection.execute("SELECT u.*, (SELECT COUNT(*) FROM works w WHERE w.user_id=u.id) AS work_count, "
+            rows = connection.execute("SELECT u.*, (SELECT COUNT(*) FROM study_documents d WHERE d.user_id=u.id) AS study_count, (SELECT COUNT(*) FROM works w WHERE w.user_id=u.id) AS work_count, "
                                       "(SELECT COUNT(*) FROM login_events l WHERE l.user_id=u.id AND l.success=1) AS login_count "
                                       "FROM users u WHERE username LIKE ? OR nickname LIKE ? ORDER BY created_at DESC,id LIMIT 24 OFFSET ?",
                                       (*params, (page - 1) * 24)).fetchall()
-        return {"items": [{**public_user(row), "work_count": row["work_count"], "login_count": row["login_count"]} for row in rows], "total": count, "page": page}
+        return {"items": [{**public_user(row), "study_count": row['study_count'], "work_count": row["work_count"], "login_count": row["login_count"]} for row in rows], "total": count, "page": page}
 
     @app.patch("/api/admin/users/{user_id}/role")
     def change_role(user_id: str, body: RoleRequest, user=Depends(owner)):

@@ -59,3 +59,13 @@ CREATE TABLE IF NOT EXISTS branch_aliases (
  PRIMARY KEY(category, old_name)
 );
 CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS study_documents (
+ id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL,
+ description TEXT NOT NULL, course TEXT NOT NULL, filename TEXT NOT NULL, format TEXT NOT NULL,
+ object_key TEXT NOT NULL UNIQUE, size INTEGER NOT NULL, preview_text TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected','deleted')),
+ reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+ purged INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS study_status ON study_documents(status, created_at);
+CREATE INDEX IF NOT EXISTS study_user ON study_documents(user_id, created_at);

@@ -19,7 +19,7 @@ export function About() {
         <Reveal delay={160}>
           <p className="text-lg leading-loose text-soft">{site.center.about}</p>
           <div className="mt-8 flex flex-wrap gap-2">
-            {site.departments.map((d) => (
+            {site.departments.filter(d => !d.internal).map((d) => (
               <span
                 key={d.key}
                 className="rounded-full border px-3.5 py-1.5 text-sm text-ink"

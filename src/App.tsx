@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Photography from "./pages/Photography";
@@ -9,6 +9,9 @@ import Operation from "./pages/Operation";
 import WeChat from "./pages/WeChat";
 import General from "./pages/General";
 import Study from "./pages/Study";
+const StudyReader = lazy(() => import("./pages/StudyReader"));
+const StudySharedReader = lazy(() => import("./pages/StudySharedReader"));
+const StudySubmit = lazy(() => import("./pages/StudySubmit"));
 import Community, { Account, Privacy } from "./pages/Community";
 import Admin from "./pages/Admin";
 import Creator from "./pages/Creator";
@@ -65,6 +68,9 @@ export default function App() {
         <Route path="/wechat" element={<WeChat />} />
         <Route path="/general" element={<General />} />
         <Route path="/study" element={<Study />} />
+        <Route path="/study/submit" element={<Suspense fallback={<p className="p-8">正在打开投稿…</p>}><StudySubmit /></Suspense>} />
+        <Route path="/study/shared/:id" element={<Suspense fallback={<p className="p-8">正在打开资料…</p>}><StudySharedReader /></Suspense>} />
+        <Route path="/study/read/:id" element={<Suspense fallback={<p className="p-8" role="status">正在打开阅读器…</p>}><StudyReader /></Suspense>} />
         <Route path="*" element={<Home />} />
       </Routes>
       </CategoriesProvider>

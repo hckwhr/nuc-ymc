@@ -19,7 +19,7 @@ export function Footer() {
             <div className="mt-5 flex flex-wrap gap-2">
               {site.departments.map((d) => (
                 <span key={d.key} className="text-xs text-soft/70">
-                  {d.name}
+                  {d.internal ? "内部学习共享" : d.name}
                 </span>
               ))}
             </div>

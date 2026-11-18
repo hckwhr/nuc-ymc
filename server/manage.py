@@ -64,6 +64,12 @@ def main():
         with app.state.db(write=True) as connection:
             connection.execute("DELETE FROM obsolete_objects WHERE object_key=?", (item["object_key"],))
     cutoff = moment - settings.log_days * 86400
+    with app.state.db() as connection:
+        documents = connection.execute("SELECT id,object_key FROM study_documents WHERE status='deleted' AND purged=0").fetchall()
+    for document in documents:
+        app.state.storage.delete(document['object_key'])
+        with app.state.db(write=True) as connection:
+            connection.execute("UPDATE study_documents SET purged=1,preview_text='' WHERE id=?", (document['id'],))
     with app.state.db(write=True) as connection:
         connection.execute("DELETE FROM sessions WHERE expires<=?", (moment,))
         connection.execute("DELETE FROM limits WHERE resets<=?", (moment,))

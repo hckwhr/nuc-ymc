@@ -16,7 +16,7 @@ export function CommunityLayout({ children }: { children: ReactNode }) {
     <header className="community-header"><Link to="/" className="community-brand" aria-label="青年媒体中心，返回首页"><img src={logoSrc} alt="" />青年媒体中心</Link>
     <nav className="community-home-nav" aria-label="主站导航">
       <Link to="/" className="community-home-link"><span aria-hidden="true">↖</span> 返回首页</Link>
-      <Link to="/#about">中心简介</Link><Link to="/#departments">部门展示</Link><Link to="/#works">作品墙</Link>
+      <Link to="/#about">中心简介</Link><Link to="/#departments">部门展示</Link><Link to="/#works">作品墙</Link><Link to="/study">学习共享</Link>
     </nav>
     <nav className="community-account-nav" aria-label="创作导航">
       <Link to="/community">作品社区</Link><Link to="/account">{user ? "投稿 / 我的作品" : "登录"}</Link>
@@ -134,6 +134,7 @@ export function Account() {
     <details className="account-settings"><summary>个人资料与账号安全</summary><form className="profile-form" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await api("/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }); await refresh(); setMessage("昵称已更新"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label>公开昵称<input value={nickname} required maxLength={32} onChange={e => setNickname(e.target.value)} /></label><button disabled={busy}>保存昵称</button></form>
     <PasswordForm /></details>
     <SubmissionTree key={user.id} userId={user.id} onSubmitted={() => { setVersion(v => v + 1); setPage(1); setQuery(""); setStatus(""); }} />
+    <section className="upload-panel"><h2>学习资料也可以分享</h2><p className="muted">按课程上传 PDF、Word 或压缩包，审核后展示在内部学习共享区。</p><Link className="button primary" to="/study/submit">分享资料 / 我的资料</Link></section>
     {error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
     <h2 className="section-title">我的作品</h2><WorkSearch value={query} onSearch={q => { setQuery(q); setPage(1); }} />
     <div className="filter-row"><label>作品状态<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">全部状态</option>{Object.entries(statusName).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><button disabled={fetching} onClick={() => setVersion(v => v + 1)}>刷新我的作品</button></div>

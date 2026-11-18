@@ -11,7 +11,7 @@ export function Departments() {
     <section id="departments" className="mx-auto max-w-7xl px-6 py-24 sm:py-28">
       <SectionHead
         kicker="Departments"
-        title={<>八大<em className="not-italic text-coral">部门</em></>}
+        title={<>认识我们的<em className="not-italic text-coral">部门</em></>}
         sub="各展所长，一起把青春讲成故事。点击部门卡片，探索作品、日常与学习资料。"
       />
 
@@ -31,6 +31,7 @@ export function Departments() {
                 <span className="text-xs uppercase tracking-widest text-soft/70">{d.nameEn}</span>
               </div>
               <p className="text-sm leading-relaxed text-soft">{d.desc}</p>
+              {d.internal && <span className="mt-3 text-xs text-indigo-600">内部学习共享</span>}
               {catalog && <p className="mt-3 text-xs text-soft">{catalog.branches.length} 个作品分支 · {Object.values(catalog.counts || {}).reduce((sum, count) => sum + count, 0)} 件公开投稿</p>}
               <div className="mt-5">
                 {d.link ? (

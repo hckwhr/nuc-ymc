@@ -5,6 +5,8 @@
   "type": "module",
   "description": "青年媒体中心官网",
   "scripts": {
+    "predev": "node tools/copy-pdf-assets.mjs",
+    "prebuild": "node tools/copy-pdf-assets.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
@@ -14,6 +16,7 @@
     "@fontsource/inter": "^5.2.8",
     "@fontsource/playfair-display": "^5.2.8",
     "@fontsource/readex-pro": "^5.2.11",
+    "pdfjs-dist": "^6.5.438",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.26.2"

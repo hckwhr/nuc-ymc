@@ -2,21 +2,31 @@ import { useEffect, useState } from "react";
 import { site } from "../data/site";
 import { logoSrc } from "../data/media";
 import { IconMenu, IconClose } from "../lib/icons";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "../lib/community";
 
 const LINKS = [
   { href: "/#about", label: "中心简介" },
   { href: "/#departments", label: "部门" },
   { href: "/#works", label: "作品" },
-  { href: "/#stats", label: "数据" },
+  { href: "/study", label: "学习共享" },
   { href: "/#recruit", label: "招新" },
   { href: "/#contact", label: "联系我们" },
-  { href: "/account", label: "登录 / 投稿" },
-  { href: "/account?mode=register", label: "注册" },
 ];
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+  const location = useLocation();
+  const links = [...LINKS, { href: "/account", label: user ? "创作空间" : "登录 / 注册" }, ...(user && user.role !== "user" ? [{ href: "/admin", label: "管理后台" }] : [])];
+  useEffect(() => { setOpen(false); }, [location.pathname, location.hash]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [open]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -40,11 +50,11 @@ export function Navbar() {
         </a>
 
         {/* 桌面导航 */}
-        <div className="hidden items-center gap-8 md:flex">
-          {LINKS.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm text-soft transition-colors hover:text-ink">
+        <div className="hidden items-center gap-5 xl:flex">
+          {links.map((l) => (
+            <Link key={l.href} to={l.href} className="text-sm text-soft transition-colors hover:text-ink">
               {l.label}
-            </a>
+            </Link>
           ))}
           <a
             href="/#recruit"
@@ -56,10 +66,11 @@ export function Navbar() {
 
         {/* 移动端按钮 */}
         <button
-          className="grid h-11 w-11 place-items-center text-ink md:hidden"
+          className="grid h-11 w-11 place-items-center text-ink xl:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="菜单"
           aria-expanded={open}
+          aria-controls="main-mobile-menu"
         >
           {open ? <IconClose width={24} height={24} /> : <IconMenu width={24} height={24} />}
         </button>
@@ -67,17 +78,17 @@ export function Navbar() {
 
       {/* 移动端下拉 */}
       {open && (
-        <div className="border-t border-line bg-background/95 backdrop-blur-xl md:hidden">
+        <div id="main-mobile-menu" className="max-h-[calc(100dvh-80px)] overflow-y-auto border-t border-line bg-background/95 backdrop-blur-xl xl:hidden">
           <div className="mx-auto flex max-w-7xl flex-col px-6 py-2">
-            {LINKS.map((l) => (
-              <a
+            {links.map((l) => (
+              <Link
                 key={l.href}
-                href={l.href}
+                to={l.href}
                 onClick={() => setOpen(false)}
                 className="border-b border-line/70 py-3.5 text-sm text-soft"
               >
                 {l.label}
-              </a>
+              </Link>
             ))}
             <a
               href="/#recruit"

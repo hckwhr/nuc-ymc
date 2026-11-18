@@ -45,6 +45,19 @@ class Storage:
         else:
             self.bucket.put_object(key, data, headers={"x-oss-object-acl": "private", "Content-Type": "image/jpeg"})
 
+    def put_document(self, key, data):
+        if self.local:
+            (self.local / key.rsplit('/', 1)[-1]).write_bytes(data)
+        else:
+            self.bucket.put_object(key, data, headers={'x-oss-object-acl': 'private', 'Content-Type': 'application/octet-stream'})
+
+    def document_range(self, key, start, end):
+        if self.local:
+            with (self.local / key.rsplit('/', 1)[-1]).open('rb') as source:
+                source.seek(start)
+                return source.read(end - start + 1)
+        return self.bucket.get_object(key, byte_range=(start, end)).read()
+
     def get(self, key, thumbnail=False):
         if self.local:
             data = (self.local / key.rsplit("/", 1)[-1]).read_bytes()
