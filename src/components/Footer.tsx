@@ -2,11 +2,12 @@ import { Link } from "react-router-dom";
 import { site } from "../data/site";
 import { logoSrc } from "../data/media";
 import { ossThumb } from "../lib/img";
+import { DepartmentExplore } from "./DepartmentExplore";
 
 export function Footer() {
   const year = new Date().getFullYear();
   return (
-    <footer id="contact" className="border-t border-line bg-background">
+    <><DepartmentExplore /><footer id="contact" className="border-t border-line bg-background">
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
           {/* 品牌 */}
@@ -69,6 +70,6 @@ export function Footer() {
           © {year} {site.center.name} · {site.center.nameEn} · Made with 热爱
         </p>
       </div>
-    </footer>
+    </footer></>
   );
 }

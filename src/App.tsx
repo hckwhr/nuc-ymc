@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
+import NotFound from "./pages/NotFound";
 import Photography from "./pages/Photography";
 import Design from "./pages/Design";
 import Douyin from "./pages/Douyin";
@@ -71,7 +72,7 @@ export default function App() {
         <Route path="/study/submit" element={<Suspense fallback={<p className="p-8">正在打开投稿…</p>}><StudySubmit /></Suspense>} />
         <Route path="/study/shared/:id" element={<Suspense fallback={<p className="p-8">正在打开资料…</p>}><StudySharedReader /></Suspense>} />
         <Route path="/study/read/:id" element={<Suspense fallback={<p className="p-8" role="status">正在打开阅读器…</p>}><StudyReader /></Suspense>} />
-        <Route path="*" element={<Home />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       </CategoriesProvider>
     </AuthProvider>

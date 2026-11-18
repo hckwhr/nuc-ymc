@@ -1,5 +1,6 @@
 import { site } from "../data/site";
 import { Reveal } from "../lib/Reveal";
+import { Link } from "react-router-dom";
 
 export function Recruit() {
   return (
@@ -19,6 +20,8 @@ export function Recruit() {
             </h2>
             <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-soft">{site.recruit.intro}</p>
             {site.recruit.contact && <p className="mt-8 text-sm text-soft">{site.recruit.contact}</p>}
+            <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-soft">具体招新时间与安排以官方通知为准。可以先了解各部门的工作，或通过下方官方联系方式咨询。</p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3"><Link to="/#departments" className="rounded-full bg-ink px-6 py-3 text-sm text-white">找到感兴趣的部门</Link><Link to="/#contact" className="rounded-full border border-line px-6 py-3 text-sm text-ink">官方联系方式与二维码</Link><a href={`mailto:${site.contact.email}`} className="rounded-full border border-line px-6 py-3 text-sm text-ink">邮件咨询</a></div>
           </div>
         </div>
       </Reveal>

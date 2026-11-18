@@ -23,6 +23,8 @@ const CURATED: LightItem[] = (() => {
 
 export function Works() {
   const [light, setLight] = useState(-1);
+  const [expanded, setExpanded] = useState(false);
+  const [feed, setFeed] = useState<"latest" | "featured">("latest");
 
   return (
     <section id="works" className="mx-auto max-w-7xl px-6 py-24 sm:py-28">
@@ -32,15 +34,16 @@ export function Works() {
         sub="摄影、设计与抖音部的共同创作，审核通过的新作品会在这里与你见面。"
       />
 
-      <div className="mb-10"><PublishedWorks featured /></div>
-      <div className="mb-14"><PublishedWorks /></div>
+      <div className="mb-6 flex flex-wrap gap-3" role="group" aria-label="首页作品筛选">{[["latest", "最新投稿"], ["featured", "编辑精选"]].map(([value, label]) => <button key={value} type="button" aria-pressed={feed === value} onClick={() => setFeed(value as "latest" | "featured")} className={`rounded-full border border-line px-5 py-3 text-sm ${feed === value ? "bg-ink text-white" : "bg-surface text-ink"}`}>{label}</button>)}<Link className="rounded-full border border-line px-5 py-3 text-sm text-ink" to="/account">我也来投稿 ↗</Link></div>
+      <div className="mb-14"><PublishedWorks key={feed} featured={feed === "featured"} previewLimit={6} /></div>
       <h3 className="mb-6 text-xl text-ink">馆藏精选</h3>
       <Reveal>
         <div className="columns-2 gap-4 md:columns-3 lg:columns-4 [&>*]:mb-4">
-          {CURATED.map((w, i) => (
+          {CURATED.slice(0, expanded ? undefined : 12).map((w, i) => (
             <button
               key={w.src}
               onClick={() => setLight(i)}
+              aria-label={`查看${w.caption}馆藏图片 ${i + 1}`}
               className="group relative block w-full overflow-hidden rounded-xl border border-line bg-surface"
             >
               <img
@@ -56,6 +59,7 @@ export function Works() {
           ))}
         </div>
       </Reveal>
+      {CURATED.length > 12 && <div className="mt-6 text-center"><button className="rounded-full border border-line px-6 py-3 text-sm text-ink" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? "收起馆藏" : `展开更多馆藏 · 共 ${CURATED.length} 张`}</button></div>}
 
       <div className="mt-12 flex flex-wrap justify-center gap-4">
         <Link to="/douyin#gallery" className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-medium text-ink">抖音部全部作品 <IconArrow width={16} height={16} /></Link>

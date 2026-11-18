@@ -77,13 +77,6 @@ export const site = {
     },
   ] as Dept[],
 
-  stats: [
-    { label: "中心成员", value: 120, suffix: "+" },   // ★占位★
-    { label: "作品产出", value: 800, suffix: "+" },   // ★占位★
-    { label: "活动场次", value: 60, suffix: "+" },    // ★占位★
-    { label: "全网阅读", value: 100, suffix: "k+" },  // ★占位★
-  ],
-
   recruit: {
     time: "每年 9~10 月招新季",
     intro: "如果你热爱记录、表达与创造，欢迎加入我们，一起让青春被看见。",
