@@ -83,4 +83,24 @@ class StudyTests(unittest.TestCase):
         self.assertEqual(owner.get('/api/study/documents/'+uid+'/file').status_code,404)
         owner.close()
 
+    def test_course_status_author_filters_and_pending_count(self):
+        author = self.register(self.client, 'student1')
+        uid = self.upload().json()['id']
+        outsider = self.new_client(); self.register(outsider, 'student2')
+        owner = self.new_client(); self.login(owner, 'hck', 'Owner-password-123')
+        self.assertEqual(owner.get('/api/admin/overview').json()['study_pending'], 1)
+        self.assertEqual(self.client.get('/api/my/study?course=电路&status=pending&q=notes').json()['total'], 1)
+        self.assertEqual(self.client.get('/api/my/study?status=approved').json()['total'], 0)
+        self.assertEqual(self.client.get('/api/my/study?course=党课').json()['total'], 0)
+        self.assertEqual(outsider.get('/api/my/study?user_id='+author['id']).json()['total'], 0)
+        self.assertEqual(owner.get('/api/admin/study?user_id='+author['id']+'&q=student1&course=电路').json()['total'], 1)
+        self.assertEqual(owner.get('/api/admin/study?user_id=missing').json()['total'], 0)
+        self.assertEqual(self.client.get('/api/my/study?status=invalid').status_code, 422)
+        entry = owner.get('/api/admin/study').json()['items'][0]
+        owner.patch('/api/admin/study/'+uid, json={'status':'approved','revision':entry['updated_at']})
+        self.assertEqual(owner.get('/api/admin/overview').json()['study_pending'], 0)
+        self.assertEqual(outsider.get('/api/study/documents?course=电路').json()['total'], 1)
+        self.assertEqual(outsider.get('/api/study/documents?course=党课').json()['total'], 0)
+        owner.close(); outsider.close()
+
 if __name__=='__main__': unittest.main()

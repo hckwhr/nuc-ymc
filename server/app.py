@@ -699,6 +699,7 @@ def create_app(settings: Settings | None = None):
                 }
             return {
                 "users": connection.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+                "study_pending": connection.execute("SELECT COUNT(*) FROM study_documents WHERE status='pending'").fetchone()[0],
                 "works": connection.execute("SELECT COUNT(*) FROM works WHERE status!='deleted'").fetchone()[0],
                 "pending": connection.execute("SELECT COUNT(*) FROM works WHERE status='pending'").fetchone()[0],
                 "logins": connection.execute("SELECT COUNT(*) FROM login_events WHERE success=1 AND created_at>?", (now() - 86400,)).fetchone()[0],

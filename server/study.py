@@ -91,8 +91,9 @@ def register_study(app, db, storage, current_user, full_administrator, audit, li
             where += ' AND d.course=?'; values.append(course)
         if q.strip():
             term = '%' + q.strip().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
-            where += " AND (d.title LIKE ? ESCAPE '\\' OR d.filename LIKE ? ESCAPE '\\' OR u.nickname LIKE ? ESCAPE '\\')"
-            values += [term, term, term]
+            columns = ['d.title', 'd.filename', 'u.nickname'] + (['u.username'] if private else [])
+            where += ' AND (' + ' OR '.join(column + " LIKE ? ESCAPE '\\'" for column in columns) + ')'
+            values += [term] * len(columns)
         with db() as connection:
             total = connection.execute('SELECT COUNT(*) FROM study_documents d JOIN users u ON u.id=d.user_id WHERE ' + where, values).fetchone()[0]
             rows = connection.execute('SELECT d.*,u.nickname,u.username FROM study_documents d JOIN users u ON u.id=d.user_id WHERE ' + where + ' ORDER BY d.created_at DESC,d.id LIMIT 24 OFFSET ?', (*values, (page-1)*24)).fetchall()
@@ -106,14 +107,22 @@ def register_study(app, db, storage, current_user, full_administrator, audit, li
         return listing(page, course, q, "d.status='approved' AND u.disabled=0", [])
 
     @app.get('/api/my/study')
-    def my_documents(page: int = 1, user=Depends(current_user)):
-        return listing(page, '', '', 'd.user_id=?', [user['id']], True)
-
-    @app.get('/api/admin/study')
-    def admin_documents(page: int = 1, status: str = '', q: str = '', user=Depends(full_administrator)):
+    def my_documents(page: int = 1, course: str = '', q: str = '', status: str = '', user=Depends(current_user)):
         if status not in ('', 'pending', 'approved', 'rejected', 'deleted'):
             raise HTTPException(422, '状态无效')
-        return listing(page, '', q, 'd.status=?' if status else '1=1', [status] if status else [], True)
+        where, values = 'd.user_id=?', [user['id']]
+        if status:
+            where += ' AND d.status=?'; values.append(status)
+        return listing(page, course, q, where, values, True)
+
+    @app.get('/api/admin/study')
+    def admin_documents(page: int = 1, status: str = '', q: str = '', course: str = '', user_id: str = '', user=Depends(full_administrator)):
+        if status not in ('', 'pending', 'approved', 'rejected', 'deleted'):
+            raise HTTPException(422, '状态无效')
+        where, values = ('d.status=?', [status]) if status else ('1=1', [])
+        if user_id:
+            where += ' AND d.user_id=?'; values.append(user_id)
+        return listing(page, course, q, where, values, True)
 
     @app.post('/api/study/documents', status_code=201)
     async def submit(title: str = Form(min_length=1, max_length=100), course: str = Form(),
