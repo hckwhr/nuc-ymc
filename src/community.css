@@ -1,6 +1,13 @@
 .community-shell { min-height: 100vh; background: #FAFAF7; color: #1A1A1A; }
 .community-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding: 22px max(24px, calc((100vw - 1240px) / 2)); background: #FFFFFF; border-bottom: 1px solid #ECE9E1; }
 .community-brand { font-weight: 700; font-size: 21px; }
+.work-discovery { padding: 22px; margin-bottom: 28px; border: 1px solid #ece9e1; border-radius: 18px; background: #fff; }
+.community-shell .work-search { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 20px; }
+.work-search label { flex: 1 1 240px; min-width: 0; }
+.discovery-options { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.discovery-options > span, .search-result-note { color: #6f6f6f; font-size: 13px; }
+.search-result-note { margin-bottom: 20px; overflow-wrap: anywhere; }
+.community-shell .discovery-options .checkbox-label { margin: 0; }
 .managed-branches { display: grid; gap: 12px; }
 .managed-branch { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding: 16px; border: 1px solid #ece9e1; border-radius: 12px; }
 .managed-branch > a { min-width: 0; overflow-wrap: anywhere; }

@@ -143,6 +143,51 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
 
+    def test_work_search_visibility_literal_query_and_status(self):
+        member = self.register(self.client, 'secretusername')
+        owner, visitor = self.new_client(), self.new_client()
+        self.login(owner, 'hck', 'Owner-password-123')
+        with self.app.state.db(write=True) as db:
+            db.execute("UPDATE users SET nickname='创作者' WHERE id=?", (member['id'],))
+            for index, (category, status, title) in enumerate([
+                ('photography', 'approved', '校园 100%_光影'),
+                ('photography', 'pending', '校园待审核'),
+                ('design', 'approved', '校园海报'),
+                ('design', 'rejected', '校园退回'),
+                ('design', 'deleted', '校园删除'),
+            ]):
+                db.execute("INSERT INTO works VALUES(?,?,?,'SUMMER',?,?,'',1,1,'其他')", (str(index), member['id'], title, category, status))
+            db.execute("INSERT INTO works VALUES('other','owner-id','校园其他作者','','photography','approved','',1,1,'其他')")
+            db.execute("INSERT INTO featured_works VALUES('0',1)")
+        def results(client, path, **params):
+            response = client.get(path, params=params)
+            self.assertEqual(response.status_code, 200, response.text)
+            return response.json()
+        public = results(visitor, '/api/works', q='校园')
+        self.assertEqual(public['total'], 3)
+        self.assertTrue(all('username' not in work and work['status'] == 'approved' for work in public['items']))
+        self.assertEqual(results(visitor, '/api/works', q='secretusername')['total'], 0)
+        for query in ['100%', '%_', '_']:
+            self.assertEqual(results(visitor, '/api/works', q=query)['total'], 1)
+        self.assertEqual(results(visitor, '/api/works', q="' OR 1=1 --")['total'], 0)
+        self.assertEqual(results(visitor, '/api/works', q=' summer ')['total'], 2)
+        self.assertEqual(results(visitor, '/api/works', q='创作者', category='design')['total'], 1)
+        self.assertEqual(results(visitor, '/api/works', q='校园', featured='true')['total'], 1)
+        self.assertEqual(results(self.client, '/api/my/works', q='校园')['total'], 5)
+        self.assertEqual(results(self.client, '/api/my/works', q='校园', status='rejected')['items'][0]['id'], '3')
+        self.assertEqual(results(owner, '/api/admin/works', q='SECRETUSERNAME')['total'], 5)
+        owner.patch('/api/admin/users/' + member['id'] + '/role', json={'role':'admin','department':'photography'})
+        self.login(self.client, 'secretusername', 'User-password-123')
+        self.assertEqual(results(self.client, '/api/admin/works', q='校园海报')['total'], 0)
+        self.assertEqual(results(self.client, '/api/admin/works', q='secretusername')['total'], 2)
+        for client, path in [(visitor, '/api/works'), (self.client, '/api/my/works'), (owner, '/api/admin/works')]:
+            self.assertEqual(client.get(path, params={'q':'x'*101}).status_code, 422)
+        self.assertEqual(self.client.get('/api/my/works?status=invalid').status_code, 422)
+        self.assertEqual(visitor.get('/api/my/works?q=校园').status_code, 401)
+        owner.patch('/api/admin/users/' + member['id'] + '/disabled', json={'disabled':True})
+        self.assertEqual(results(visitor, '/api/works', q='创作者')['total'], 0)
+        owner.close(); visitor.close()
+
     def test_scoped_administrator_and_branch_lifecycle(self):
         owner, visitor = self.new_client(), self.new_client()
         self.login(owner, 'hck', 'Owner-password-123')

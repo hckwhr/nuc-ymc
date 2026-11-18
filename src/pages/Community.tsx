@@ -6,6 +6,7 @@ import { departmentNames as departments, type Department } from "../lib/categori
 import { logoSrc } from "../data/media";
 import "../community.css";
 import { NotificationLink } from "../components/NotificationLink";
+import { WorkSearch } from "../components/WorkSearch";
 
 export function CommunityLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -49,16 +50,29 @@ export function WorkCard({ work, children }: { work: Work; children?: ReactNode 
 
 export default function Community() {
   const [data, setData] = useState<Page<Work>>({ items: [], total: 0, page: 1 });
-  const [page, setPage] = useState(1), [category, setCategory] = useState(""), [branch, setBranch] = useState("");
+  const [params, setParams] = useSearchParams();
+  const rawPage = Number(params.get("page") || 1);
+  const page = Number.isInteger(rawPage) && rawPage > 0 && rawPage <= 100000 ? rawPage : 1;
+  const category = params.get("category") || "", branch = params.get("branch") || "", query = params.get("q") || "";
+  const featured = params.get("featured") === "true";
+  const [version, setVersion] = useState(0);
+  function filter(values: Record<string, string>) {
+    const next = new URLSearchParams(params); next.delete("page");
+    Object.entries(values).forEach(([key, value]) => { if (value) next.set(key, value); else next.delete(key); });
+    setParams(next);
+  }
   const [error, setError] = useState(""), [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true; setLoading(true); setError("");
-    api<Page<Work>>(`/works?page=${page}&category=${category}&branch=${encodeURIComponent(branch)}`).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
+    const filters = new URLSearchParams({ page: String(page), category, branch, q: query, featured: String(featured) });
+    api<Page<Work>>(`/works?${filters}`).then(value => { if (active) setData(value); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, category, branch]);
+  }, [page, category, branch, query, featured, version]);
   return <CommunityLayout><div className="page-heading"><div><p className="eyebrow">校园创作</p><h1>让作品被看见</h1><p className="muted">汇集摄影、设计与抖音部的创作，记录你眼中的校园。</p></div><Link className="primary button" to="/account">上传我的作品</Link></div>
-    <DepartmentFilters category={category} branch={branch} onChange={(category, branch) => { setCategory(category); setBranch(branch); setPage(1); }} />
-    {error && <p className="notice error" role="alert">{error}</p>}{loading ? <p role="status">正在加载作品…</p> : <><div className="works-grid">{data.items.map(work => <WorkCard key={work.id} work={work} />)}</div>{!error && data.total === 0 && <div className="empty-state">还没有公开投稿，期待你的第一件作品。</div>}<Pagination page={page} total={data.total} change={setPage} /></>}
+    <section className="work-discovery" aria-label="查找公开作品"><WorkSearch value={query} onSearch={q => filter({ q })} />
+    <DepartmentFilters category={category} branch={branch} onChange={(category, branch) => filter({ category, branch })} />
+    <div className="discovery-options"><label className="checkbox-label"><input type="checkbox" checked={featured} onChange={e => filter({ featured: e.target.checked ? "true" : "" })} />只看编辑精选</label>{(query || category || branch || featured) && <button onClick={() => setParams({})}>重置全部筛选</button>}<span>筛选后的网址可以直接分享</span></div></section>
+    {loading ? <p role="status">正在加载作品…</p> : error ? <div className="notice error" role="alert">{error} <button onClick={() => setVersion(v => v + 1)}>重新加载作品</button></div> : <><p className="search-result-note" role="status">{query ? `“${query}” · ` : ""}找到 {data.total} 件公开作品</p><div className="works-grid">{data.items.map(work => <WorkCard key={work.id} work={work} />)}</div>{data.items.length === 0 && <div className="empty-state"><p>{query || category || featured ? "没有符合条件的作品，试试其他关键词或部门。" : "还没有公开投稿，期待你的第一件作品。"}</p>{page > 1 && <button onClick={() => filter({})}>返回第一页</button>}</div>}<Pagination page={page} total={data.total} change={page => filter({ page: String(page) })} /></>}
   </CommunityLayout>;
 }
 
@@ -102,8 +116,15 @@ export function Account() {
   const { user, loading, error: serviceError, refresh } = useAuth();
   const [works, setWorks] = useState<Page<Work>>({ items: [], total: 0, page: 1 }), [page, setPage] = useState(1), [version, setVersion] = useState(0);
   const [error, setError] = useState(""), [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [nickname, setNickname] = useState("");
+  const [query, setQuery] = useState(""), [status, setStatus] = useState(""), [fetching, setFetching] = useState(true), [workError, setWorkError] = useState("");
   useEffect(() => { setNickname(user?.nickname || ""); }, [user?.nickname]);
-  useEffect(() => { if (!user || user.must_change_password) return; let active = true; api<Page<Work>>(`/my/works?page=${page}`).then(data => { if (active) setWorks(data); }).catch(e => { if (active) setError(e.message); }); return () => { active = false; }; }, [user?.id, user?.must_change_password, page, version]);
+  useEffect(() => {
+    if (!user || user.must_change_password) return;
+    let active = true; setFetching(true); setWorkError("");
+    const filters = new URLSearchParams({ page: String(page), q: query, status });
+    api<Page<Work>>(`/my/works?${filters}`).then(data => { if (active) setWorks(data); }).catch(e => { if (active) setWorkError(e.message); }).finally(() => { if (active) setFetching(false); });
+    return () => { active = false; };
+  }, [user?.id, user?.must_change_password, page, version, query, status]);
   async function remove(work: Work) {
     if (!window.confirm(`确定删除《${work.title}》？删除后作品将无法访问。`)) return;
     setBusy(true); setError("");
@@ -113,9 +134,11 @@ export function Account() {
     <div className="page-heading"><div><p className="eyebrow">{roleName[user.role]}</p><h1>我的创作空间</h1><p className="account-identity">登录用户名 <strong>@{user.username}</strong><span>公开昵称 · {user.nickname}</span></p></div>{user.role !== "user" && <Link className="button" to="/admin">进入管理后台</Link>}</div>
     <details className="account-settings"><summary>个人资料与账号安全</summary><form className="profile-form" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await api("/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }); await refresh(); setMessage("昵称已更新"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label>公开昵称<input value={nickname} required maxLength={32} onChange={e => setNickname(e.target.value)} /></label><button disabled={busy}>保存昵称</button></form>
     <PasswordForm /></details>
-    <SubmissionTree onSubmitted={() => { setVersion(v => v + 1); setPage(1); }} />
+    <SubmissionTree onSubmitted={() => { setVersion(v => v + 1); setPage(1); setQuery(""); setStatus(""); }} />
     {error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
-    <h2 className="section-title">我的作品</h2><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <div className="action-row"><Link className="button" to={`/account/works/${work.id}/edit`}>{work.status === "rejected" ? "修改并重新投稿" : "编辑作品"}</Link><button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button></div>}</WorkCard>)}</div>{works.total === 0 && <p className="empty-state">你的投稿和审核结果会显示在这里。</p>}<Pagination page={page} total={works.total} change={setPage} />
+    <h2 className="section-title">我的作品</h2><WorkSearch value={query} onSearch={q => { setQuery(q); setPage(1); }} />
+    <div className="filter-row"><label>作品状态<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">全部状态</option>{Object.entries(statusName).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><button disabled={fetching} onClick={() => setVersion(v => v + 1)}>刷新我的作品</button></div>
+    {fetching ? <p role="status">正在加载我的作品…</p> : workError ? <div role="alert" className="notice error">{workError} <button onClick={() => setVersion(v => v + 1)}>重试加载我的作品</button></div> : <><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <div className="action-row"><Link className="button" to={`/account/works/${work.id}/edit`}>{work.status === "rejected" ? "修改并重新投稿" : "编辑作品"}</Link><button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button></div>}</WorkCard>)}</div>{works.items.length === 0 && <div className="empty-state"><p>{query || status ? "没有符合条件的投稿。" : "你的投稿和审核结果会显示在这里。"}</p>{(query || status || page > 1) && <button onClick={() => { setQuery(""); setStatus(""); setPage(1); }}>查看全部投稿</button>}</div>}<Pagination page={page} total={works.total} change={setPage} /></>}
   </>}</CommunityLayout>;
 }
 

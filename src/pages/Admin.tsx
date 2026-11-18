@@ -5,6 +5,7 @@ import { DepartmentFilters } from "../components/SubmissionTree";
 import { AdminScope } from "../components/AdminScope";
 import { departmentNames, type Department } from "../lib/categories";
 import { BranchManager } from "../components/BranchManager";
+import { WorkSearch } from "../components/WorkSearch";
 import { CommunityLayout, LoginForm, Pagination, WorkCard } from "./Community";
 
 type Member = User & { work_count: number; login_count: number };
@@ -19,6 +20,7 @@ export default function Admin() {
   const [tab, setTab] = useState("users"), [page, setPage] = useState(1), [version, setVersion] = useState(0);
   const [category, setCategory] = useState(""), [branch, setBranch] = useState("");
   const [status, setStatus] = useState("pending"), [query, setQuery] = useState(""), [search, setSearch] = useState("");
+  const [workQuery, setWorkQuery] = useState("");
   const [member, setMember] = useState<Member | null>(null), [overview, setOverview] = useState<Overview | null>(null);
   const [members, setMembers] = useState<Member[]>([]), [works, setWorks] = useState<Work[]>([]), [logins, setLogins] = useState<Login[]>([]), [audit, setAudit] = useState<Audit[]>([]);
   const [total, setTotal] = useState(0), [fetching, setFetching] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -36,7 +38,7 @@ export default function Admin() {
     let active = true; setFetching(true); setError("");
     const filters = new URLSearchParams({ page: String(page) });
     if (tab === "users") filters.set("q", search);
-    if (tab === "works") { filters.set("status", status); filters.set("category", category); filters.set("branch", branch); }
+    if (tab === "works") { filters.set("status", status); filters.set("category", category); filters.set("branch", branch); filters.set("q", workQuery); }
     if (member && (tab === "works" || tab === "logins")) filters.set("user_id", member.id);
     api<Page<Member | Work | Login | Audit>>(`/admin/${tab}?${filters}`).then(data => {
       if (!active) return;
@@ -45,11 +47,11 @@ export default function Admin() {
       if (tab === "works") setWorks(data.items as Work[]);
       if (tab === "logins") setLogins(data.items as Login[]);
       if (tab === "audit") setAudit(data.items as Audit[]);
-    }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setFetching(false); });
+    }).catch(e => { if (active) { setError(e.message); setWorks([]); setMembers([]); setLogins([]); setAudit([]); setTotal(0); } }).finally(() => { if (active) setFetching(false); });
     return () => { active = false; };
-  }, [authorized, tab, page, version, search, status, category, branch, member?.id, scoped]);
+  }, [authorized, tab, page, version, search, status, category, branch, member?.id, scoped, workQuery]);
   function navigate(next: string) { setTab(next); setPage(1); setMember(null); }
-  function inspect(target: Member, next: string) { setMember(target); setTab(next); setStatus(""); setCategory(""); setBranch(""); setPage(1); }
+  function inspect(target: Member, next: string) { setMember(target); setTab(next); setStatus(""); setCategory(""); setBranch(""); setWorkQuery(""); setPage(1); }
   async function mutation(path: string, body: object) {
     setBusy(true); setError("");
     try { await api(path, { method: "PATCH", body: JSON.stringify(body) }); setVersion(v => v + 1); return true; }
@@ -71,6 +73,7 @@ export default function Admin() {
     {member && <div className="member-filter"><span>正在查看 {member.nickname} · {member.username}</span><button onClick={() => { setMember(null); setPage(1); }}>查看全部用户</button></div>}
     {tab === "works" && <div className="filter-row"><label>审核状态 <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">全部状态</option><option value="pending">待审核</option><option value="approved">已公开</option><option value="rejected">已退回</option><option value="deleted">已删除</option></select></label></div>}
     {tab === "works" && <DepartmentFilters onlyDepartment={scoped ? user.department : null} category={category} branch={branch} onChange={(category, branch) => { setCategory(category); setBranch(branch); setPage(1); }} />}
+    {tab === "works" && <WorkSearch value={workQuery} privateView onSearch={query => { setWorkQuery(query); setPage(1); }} />}
     {tab === "users" && <form className="search-form" onSubmit={e => { e.preventDefault(); setSearch(query); setPage(1); }}><label>搜索用户<input placeholder="用户名或昵称" value={query} maxLength={100} onChange={e => setQuery(e.target.value)} /></label><button>搜索</button></form>}
     {error && <p className="notice error" role="alert">{error}</p>}{fetching ? <p role="status">正在加载…</p> : <>
       {tab === "works" && <div className="works-grid">{works.map(work => <WorkCard work={work} key={work.id}>{work.status !== "deleted" && <div className="action-row">{work.status === "approved" && <button disabled={busy} onClick={() => void mutation(`/admin/works/${work.id}/featured`, { featured: !work.featured })}>{work.featured ? "取消首页精选" : "设为首页精选"}</button>}{work.status !== "approved" && <button disabled={busy} onClick={() => void mutation(`/admin/works/${work.id}`, { status: "approved" })}>通过审核</button>}<button disabled={busy} onClick={() => { setDecision({ work, status: "rejected" }); setReason(""); }}>退回</button><button className="danger" disabled={busy} onClick={() => { setDecision({ work, status: "deleted" }); setReason(""); }}>删除</button></div>}</WorkCard>)}</div>}

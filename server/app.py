@@ -404,8 +404,20 @@ def create_app(settings: Settings | None = None):
              " ORDER BY w.created_at DESC,w.id LIMIT 24 OFFSET ?"), (*params, (page - 1) * 24)).fetchall()
         return {"items": [serialize_work(connection, row, private) for row in rows], "total": count, "page": page}
 
+    def search_works(query, private=False):
+        if len(query) > 100:
+            raise HTTPException(422, "搜索词最多 100 个字符")
+        query = query.strip().lower()
+        if not query:
+            return "", ()
+        # instr treats %, _ and quotes literally rather than as LIKE wildcards.
+        fields = ["w.title", "w.description", "u.nickname"]
+        if private:
+            fields.append("u.username")
+        return " AND (" + " OR ".join(f"instr(lower({field}),?)>0" for field in fields) + ")", tuple(query for _ in fields)
+
     @app.get("/api/works")
-    def works(page: int = 1, category: str = "", branch: str = "", featured: bool = False):
+    def works(page: int = 1, category: str = "", branch: str = "", featured: bool = False, q: str = ""):
         if page < 1 or page > 100000 or (category and category not in CATEGORIES):
             raise HTTPException(422, "无效筛选条件")
         if branch and not valid_branch(category, branch):
@@ -417,6 +429,8 @@ def create_app(settings: Settings | None = None):
             where, params = where + " AND w.branch=?", (*params, branch)
         if featured:
             where += " AND EXISTS(SELECT 1 FROM featured_works WHERE work_id=w.id)"
+        search, values = search_works(q)
+        where, params = where + search, (*params, *values)
         with db() as connection:
             return list_works(connection, where, params, page, False, featured)
 
@@ -454,11 +468,15 @@ def create_app(settings: Settings | None = None):
         return {"ok": True}
 
     @app.get("/api/my/works")
-    def my_works(page: int = 1, user=Depends(current_user)):
-        if page < 1 or page > 100000:
-            raise HTTPException(422, "无效页码")
+    def my_works(page: int = 1, q: str = "", status: str = "", user=Depends(current_user)):
+        if page < 1 or page > 100000 or status not in {"", "pending", "approved", "rejected", "deleted"}:
+            raise HTTPException(422, "无效筛选条件")
+        search, values = search_works(q, True)
+        where, params = "w.user_id=?" + search, (user["id"], *values)
+        if status:
+            where, params = where + " AND w.status=?", (*params, status)
         with db() as connection:
-            return list_works(connection, "w.user_id=?", (user["id"],), page, True)
+            return list_works(connection, where, params, page, True)
 
     @app.post("/api/works", status_code=201)
     async def upload(request: Request, title: str = Form(min_length=1, max_length=100),
@@ -710,7 +728,7 @@ def create_app(settings: Settings | None = None):
         return {"ok": True}
 
     @app.get("/api/admin/works")
-    def admin_works(status: str = "", user_id: str = "", page: int = 1, category: str = "", branch: str = "", user=Depends(administrator)):
+    def admin_works(status: str = "", user_id: str = "", page: int = 1, category: str = "", branch: str = "", q: str = "", user=Depends(administrator)):
         if status not in {"", "pending", "approved", "rejected", "deleted"} or page < 1 or page > 100000:
             raise HTTPException(422, "无效查询条件")
         where, params = ["1=1"], []
@@ -733,8 +751,9 @@ def create_app(settings: Settings | None = None):
         if user_id:
             where.append("w.user_id=?")
             params.append(user_id)
+        search, values = search_works(q, True)
         with db() as connection:
-            return list_works(connection, " AND ".join(where), tuple(params), page, True)
+            return list_works(connection, " AND ".join(where) + search, (*params, *values), page, True)
 
     @app.patch("/api/admin/works/{work_id}/featured")
     def feature_work(work_id: str, body: FeaturedRequest, user=Depends(administrator)):
