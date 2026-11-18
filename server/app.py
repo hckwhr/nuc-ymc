@@ -20,6 +20,7 @@ from .migrations import migrate_departments
 from .settings import Settings
 from .storage import Storage, clean_image
 from .study import register_study
+from .content import register_content
 
 CONSENT_VERSION = "2026-11-18"
 SESSION_SECONDS = 12 * 3600
@@ -122,7 +123,7 @@ def create_app(settings: Settings | None = None):
     app.state.db = db
     app.state.storage = storage
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.origins), allow_credentials=True,
-                       allow_methods=["GET", "POST", "PATCH", "DELETE"],
+                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
                        allow_headers=["Content-Type", "X-CSRF-Token", "Range"],
                        expose_headers=["Accept-Ranges", "Content-Length", "Content-Range", "Content-Disposition"])
     secure = settings.environment == "production"
@@ -212,6 +213,7 @@ def create_app(settings: Settings | None = None):
 
     dummy_hash = hash_password(secrets.token_urlsafe(32))
     register_study(app, db, storage, current_user, full_administrator, audit, limited, now)
+    register_content(app, db, full_administrator, audit, now)
     upload_lock = asyncio.Lock()
 
     @app.get("/api/health")

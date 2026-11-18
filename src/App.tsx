@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
+import { SiteContentProvider } from "./lib/siteContent";
 import NotFound from "./pages/NotFound";
 import Photography from "./pages/Photography";
 import Design from "./pages/Design";
@@ -49,7 +50,7 @@ function ScrollManager() {
 export default function App() {
   return (
     <AuthProvider>
-      <CategoriesProvider>
+      <CategoriesProvider><SiteContentProvider>
       <ScrollManager />
       <Routes>
         <Route path="/account/works/:id/edit" element={<EditWork />} />
@@ -74,7 +75,7 @@ export default function App() {
         <Route path="/study/read/:id" element={<Suspense fallback={<p className="p-8" role="status">正在打开阅读器…</p>}><StudyReader /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      </CategoriesProvider>
+      </SiteContentProvider></CategoriesProvider>
     </AuthProvider>
   );
 }

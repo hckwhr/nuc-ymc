@@ -1,3 +1,4 @@
+import { useSiteContent } from "../lib/siteContent";
 import { site } from "../data/site";
 import { useFadeLoopVideo } from "../lib/useFadeLoopVideo";
 import { IconArrow } from "../lib/icons";
@@ -5,6 +6,7 @@ import { IconArrow } from "../lib/icons";
 const HERO_VIDEO = "/assets/video/hero.mp4"; // ★占位★ 换成你们自己的校园/活动视频即可
 
 export function Hero() {
+  const { values } = useSiteContent();
   const videoRef = useFadeLoopVideo();
 
   return (
@@ -41,7 +43,7 @@ export function Hero() {
         </h1>
 
         <p className="mt-8 max-w-2xl text-base leading-relaxed text-soft sm:text-lg animate-fade-rise-delay">
-          {site.center.intro}
+          {values.center_intro}
         </p>
 
         <div className="mt-11 flex flex-wrap items-center justify-center gap-4 animate-fade-rise-delay-2">

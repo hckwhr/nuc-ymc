@@ -1,3 +1,4 @@
+import { useSiteContent } from "../lib/siteContent";
 import { Link } from "react-router-dom";
 import { site } from "../data/site";
 import { Reveal } from "../lib/Reveal";
@@ -6,6 +7,7 @@ import { DeptIcon, IconArrow } from "../lib/icons";
 import { useCategories, type Department } from "../lib/categories";
 
 export function Departments() {
+  const { values } = useSiteContent();
   const { departments } = useCategories();
   return (
     <section id="departments" className="mx-auto max-w-7xl px-6 py-24 sm:py-28">
@@ -30,7 +32,7 @@ export function Departments() {
                 <h3 className="font-display text-2xl text-ink">{d.name}</h3>
                 <span className="text-xs uppercase tracking-widest text-soft/70">{d.nameEn}</span>
               </div>
-              <p className="text-sm leading-relaxed text-soft">{d.desc}</p>
+              <p className="text-sm leading-relaxed text-soft">{values[`department_${d.key}` as keyof typeof values] || d.desc}</p>
               {d.internal && <span className="mt-3 text-xs text-indigo-600">内部学习共享</span>}
               {catalog && <p className="mt-3 text-xs text-soft">{catalog.branches.length} 个作品分支 · {Object.values(catalog.counts || {}).reduce((sum, count) => sum + count, 0)} 件公开投稿</p>}
               <div className="mt-5">

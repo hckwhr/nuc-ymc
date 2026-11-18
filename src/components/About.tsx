@@ -1,7 +1,9 @@
+import { useSiteContent } from "../lib/siteContent";
 import { site } from "../data/site";
 import { Reveal } from "../lib/Reveal";
 
 export function About() {
+  const { values } = useSiteContent();
   return (
     <section id="about" className="mx-auto max-w-7xl px-6 py-24 sm:py-32">
       <div className="grid items-center gap-12 md:grid-cols-2 md:gap-20">
@@ -17,7 +19,7 @@ export function About() {
           </Reveal>
         </div>
         <Reveal delay={160}>
-          <p className="text-lg leading-loose text-soft">{site.center.about}</p>
+          <p className="text-lg leading-loose text-soft">{values.center_about}</p>
           <div className="mt-8 flex flex-wrap gap-2">
             {site.departments.filter(d => !d.internal).map((d) => (
               <span

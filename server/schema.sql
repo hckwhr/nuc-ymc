@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS branch_aliases (
  PRIMARY KEY(category, old_name)
 );
 CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS site_content (
+ id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, body TEXT NOT NULL, updated_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS study_documents (
  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL,
  description TEXT NOT NULL, course TEXT NOT NULL, filename TEXT NOT NULL, format TEXT NOT NULL,

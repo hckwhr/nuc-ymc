@@ -1,3 +1,4 @@
+import { Announcement } from "../components/Announcement";
 import { Navbar } from "../components/Navbar";
 import { Hero } from "../components/Hero";
 import { About } from "../components/About";
@@ -13,6 +14,7 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <Announcement />
         <Works />
         <About />
         <Departments />
