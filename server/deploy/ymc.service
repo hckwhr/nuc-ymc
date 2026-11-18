@@ -1,0 +1,23 @@
+[Unit]
+Description=Youth Media community API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ymc
+Group=ymc
+WorkingDirectory=/opt/nuc-ymc/app
+EnvironmentFile=/etc/nuc-ymc.env
+ExecStart=/opt/nuc-ymc/venv/bin/uvicorn server.app:create_app --factory --host 127.0.0.1 --port 8000 --workers 1 --limit-concurrency 16 --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nuc-ymc
+MemoryMax=650M
+
+[Install]
+WantedBy=multi-user.target

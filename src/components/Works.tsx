@@ -54,6 +54,7 @@ export function Works() {
       </Reveal>
 
       <div className="mt-12 flex flex-wrap justify-center gap-4">
+        <Link to="/community" className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-medium text-white">作品社区 / 上传作品 <IconArrow width={16} height={16} /></Link>
         <Link
           to="/photography"
           className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-medium text-ink transition-colors hover:border-sky hover:text-sky"

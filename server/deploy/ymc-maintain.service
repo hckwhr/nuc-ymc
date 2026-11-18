@@ -1,0 +1,17 @@
+[Unit]
+Description=Youth Media private file cleanup and database backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ymc
+Group=ymc
+WorkingDirectory=/opt/nuc-ymc/app
+EnvironmentFile=/etc/nuc-ymc.env
+ExecStart=/opt/nuc-ymc/venv/bin/python -m server.manage maintain
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nuc-ymc
