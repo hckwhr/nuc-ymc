@@ -1,6 +1,11 @@
 .community-shell { min-height: 100vh; background: #FAFAF7; color: #1A1A1A; }
 .community-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding: 22px max(24px, calc((100vw - 1240px) / 2)); background: #FFFFFF; border-bottom: 1px solid #ECE9E1; }
 .community-brand { font-weight: 700; font-size: 21px; }
+.creator-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 28px; border: 1px solid #ece9e1; background: #fff; border-radius: 20px; }
+.creator-heading > div { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.creator-mark { display: grid; place-items: center; width: 76px; height: 76px; border-radius: 24px; background: #fff0ea; color: #9b4934; font-size: 30px; }
+.creator-filters { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0; }
+.community-shell .creator-filters button[aria-pressed=true] { background: #1a1a1a; color: white; }
 .draft-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; padding: 16px; background: #fff0ea; border-radius: 12px; font-size: 13px; }
 .draft-notice p { flex: 1 1 220px; }
 .community-shell .preview-image { display: block; padding: 0; width: 100%; overflow: hidden; }

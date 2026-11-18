@@ -10,6 +10,7 @@ import WeChat from "./pages/WeChat";
 import General from "./pages/General";
 import Community, { Account, Privacy } from "./pages/Community";
 import Admin from "./pages/Admin";
+import Creator from "./pages/Creator";
 import WorkDetail from "./pages/WorkDetail";
 import Notifications from "./pages/Notifications";
 import EditWork from "./pages/EditWork";
@@ -47,6 +48,7 @@ export default function App() {
       <ScrollManager />
       <Routes>
         <Route path="/account/works/:id/edit" element={<EditWork />} />
+        <Route path="/creators/:id" element={<Creator />} />
         <Route path="/works/:id" element={<WorkDetail />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/community" element={<Community />} />

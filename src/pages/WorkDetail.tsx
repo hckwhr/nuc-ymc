@@ -35,7 +35,7 @@ export default function WorkDetail() {
   }
   return <CommunityLayout><div className="detail-back"><Link to="/#works">← 首页作品墙</Link><Link to="/community">全部公开作品 ↗</Link></div>
     {loading ? <p role="status">正在打开作品…</p> : !work ? <section className="empty-state"><h1>暂时无法查看这件作品</h1><p role="alert">{error}</p><button onClick={() => setVersion(v => v + 1)}>重新加载</button></section> : <article className="work-detail">
-      <header className="work-detail-heading"><p className="eyebrow">{departmentNames[work.category as Department]?.name} / {work.branch}{work.featured && <span className="featured-badge">编辑精选</span>}</p><h1>{work.title}</h1><p className="muted">创作者 · {work.nickname}</p><p className="muted">{work.published_at ? `发布于 ${dateText(work.published_at)}` : `投稿于 ${dateText(work.created_at)}`} · {work.images.length} 张作品</p>
+      <header className="work-detail-heading"><p className="eyebrow">{departmentNames[work.category as Department]?.name} / {work.branch}{work.featured && <span className="featured-badge">编辑精选</span>}</p><h1>{work.title}</h1><p className="muted">创作者 · {work.creator_id ? <Link to={`/creators/${work.creator_id}`}>{work.nickname} ↗</Link> : work.nickname}</p><p className="muted">{work.published_at ? `发布于 ${dateText(work.published_at)}` : `投稿于 ${dateText(work.created_at)}`} · {work.images.length} 张作品</p>
         <div className="action-row"><button className="primary" onClick={() => void copy()}>复制作品链接</button><Link className="button" to={`/${work.category}#cat-${encodeURIComponent(work.branch)}`}>浏览这个分支 ↗</Link></div>
         {shared && <p className="notice" role="status">{shared}</p>}{manualCopy && <label>作品分享链接<input value={url} readOnly onFocus={e => e.target.select()} /></label>}
       </header>

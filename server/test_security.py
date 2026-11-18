@@ -143,6 +143,55 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
 
+    def test_creator_profile_and_thumbnail_access(self):
+        member = self.register(self.client, 'creatorprofile')
+        owner, visitor = self.new_client(), self.new_client()
+        self.login(owner, 'hck', 'Owner-password-123')
+        picture = io.BytesIO(); Image.new('RGB', (1600, 1000), 'blue').save(picture, 'JPEG')
+        with self.app.state.db(write=True) as db:
+            for index, (category, status) in enumerate([('design','approved'),('photography','approved'),('design','pending')]):
+                db.execute("INSERT INTO works VALUES(?,?,?,'',?,?,'',1,1,'其他')", (str(index), member['id'], '作品', category, status))
+                db.execute("INSERT INTO images VALUES(?,?,?,?,?,0)", (str(index), str(index), str(index)+'.jpg', 0, len(picture.getvalue())))
+                self.app.state.storage.put(str(index)+'.jpg', picture.getvalue())
+        profile = visitor.get('/api/creators/'+member['id']).json()
+        self.assertEqual(set(profile), {'id','nickname','counts','works'})
+        self.assertEqual(profile['works']['total'], 2)
+        self.assertEqual(profile['counts'], {'design':1,'photography':1})
+        self.assertEqual(visitor.get('/api/creators/'+member['id']+'?category=design').json()['works']['total'], 1)
+        self.assertEqual(visitor.get('/api/creators/owner-id').status_code, 404)
+        self.assertEqual(visitor.get('/api/creators/'+member['id']+'?page=0').status_code, 422)
+        for work in profile['works']['items']:
+            self.assertEqual(work['creator_id'], member['id'])
+            self.assertNotIn('username', work); self.assertNotIn('user_id', work)
+        thumb = visitor.get('/api/images/0?size=thumb')
+        self.assertEqual(thumb.status_code, 200)
+        self.assertEqual(Image.open(io.BytesIO(thumb.content)).size, (640,400))
+        self.assertLess(len(thumb.content), len(picture.getvalue()))
+        self.assertEqual(thumb.headers['cache-control'], 'no-store')
+        self.assertEqual(visitor.get('/api/images/2?size=thumb').status_code, 401)
+        self.assertEqual(self.client.get('/api/images/2?size=thumb').status_code, 200)
+        self.assertEqual(visitor.get('/api/images/0?size=giant').status_code, 422)
+        owner.patch('/api/admin/works/0', json={'status':'deleted','reason':'下架'})
+        self.assertEqual(visitor.get('/api/images/0?size=thumb').status_code, 404)
+        owner.patch('/api/admin/users/'+member['id']+'/disabled', json={'disabled':True})
+        self.assertEqual(visitor.get('/api/creators/'+member['id']).status_code, 404)
+        self.assertEqual(visitor.get('/api/images/1?size=thumb').status_code, 401)
+        owner.close(); visitor.close()
+
+    def test_backup_drill_checks_references_without_mutation(self):
+        from server.verify_backup import inspect_backup
+        with self.app.state.db(write=True) as db:
+            db.execute("INSERT INTO works VALUES('backup','owner-id','备份作品','','design','approved','',1,1,'海报')")
+            db.execute("INSERT INTO images VALUES('backup','backup','backup.jpg',0,1,0)")
+        path = Path(self.temp.name)/'drill.sqlite3'
+        with self.app.state.db() as db, sqlite3.connect(path) as target:
+            db.backup(target)
+        target.close()
+        before = path.read_bytes()
+        self.assertEqual(inspect_backup(path, lambda key: key=='backup.jpg')['missing_images'], 0)
+        self.assertEqual(inspect_backup(path, lambda key: False)['missing_images'], 1)
+        self.assertEqual(path.read_bytes(), before)
+
     def test_moderation_revision_prevents_stale_decision(self):
         self.login(self.client, 'hck', 'Owner-password-123')
         with self.app.state.db(write=True) as db:

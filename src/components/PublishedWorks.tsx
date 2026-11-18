@@ -47,9 +47,9 @@ export function PublishedWorks({ category = "", branch = "", featured = false }:
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {data.items.map(work => <article key={work.id} className="overflow-hidden rounded-2xl border border-line bg-surface" data-work-id={work.id}>
           <Link className="group block w-full" aria-label={`查看 ${work.title}`} to={`/works/${work.id}`}>
-            {work.images[0] && <img src={`${API}/api/images/${work.images[0]}`} alt={work.title} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />}
+            {work.images[0] && <img src={`${API}/api/images/${work.images[0]}?size=thumb`} alt={work.title} loading="lazy" className="aspect-[4/3] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />}
           </Link>
-          <div className="p-5"><p className="text-xs text-soft">{departmentNames[work.category as Department]?.name} · {work.branch} · {work.images.length} 张</p><h4 className="mt-2 break-words text-lg font-medium text-ink"><Link to={`/works/${work.id}`}>{work.title}</Link></h4><p className="mt-2 break-words text-sm text-soft">{work.nickname}</p>{work.description && <p className="mt-3 line-clamp-3 break-words text-sm text-soft">{work.description}</p>}</div>
+          <div className="p-5"><p className="text-xs text-soft">{departmentNames[work.category as Department]?.name} · {work.branch} · {work.images.length} 张</p><h4 className="mt-2 break-words text-lg font-medium text-ink"><Link to={`/works/${work.id}`}>{work.title}</Link></h4><p className="mt-2 break-words text-sm text-soft">{work.creator_id ? <Link to={`/creators/${work.creator_id}`}>{work.nickname} ↗</Link> : work.nickname}</p>{work.description && <p className="mt-3 line-clamp-3 break-words text-sm text-soft">{work.description}</p>}</div>
         </article>)}
       </div>
       {data.total === 0 && !featured && <p className="mb-5 text-sm text-soft">这个位置等待你的新作品。<Link to="/account" className="ml-2 underline underline-offset-4">去投稿 ↗</Link></p>}

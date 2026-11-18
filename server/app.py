@@ -389,6 +389,7 @@ def create_app(settings: Settings | None = None):
 
     def serialize_work(connection, row, private=False):
         result = dict(row)
+        result["creator_id"] = row["user_id"]
         result["featured"] = connection.execute("SELECT 1 FROM featured_works WHERE work_id=?", (row["id"],)).fetchone() is not None
         if not private:
             for field in ("username", "reason", "user_id"):
@@ -434,6 +435,20 @@ def create_app(settings: Settings | None = None):
         where, params = where + search, (*params, *values)
         with db() as connection:
             return list_works(connection, where, params, page, False, featured)
+
+    @app.get("/api/creators/{creator_id}")
+    def creator_profile(creator_id: str, page: int = 1, category: str = ""):
+        if page < 1 or page > 100000 or (category and category not in CATEGORIES):
+            raise HTTPException(422, "无效筛选条件")
+        with db() as connection:
+            creator = connection.execute("SELECT id,nickname FROM users WHERE id=? AND disabled=0 AND EXISTS(SELECT 1 FROM works WHERE user_id=users.id AND status='approved')", (creator_id,)).fetchone()
+            if not creator:
+                raise HTTPException(404, "创作者暂无公开作品或主页暂不可用")
+            where, params = "w.user_id=? AND w.status='approved' AND u.disabled=0", (creator_id,)
+            counts = {row['category']: row['total'] for row in connection.execute("SELECT category,COUNT(*) AS total FROM works WHERE user_id=? AND status='approved' GROUP BY category", (creator_id,))}
+            if category:
+                where, params = where + " AND w.category=?", (*params, category)
+            return {"id": creator["id"], "nickname": creator["nickname"], "counts": counts, "works": list_works(connection, where, params, page, False)}
 
     @app.get("/api/works/{work_id}")
     def work_detail(work_id: str):
@@ -642,7 +657,9 @@ def create_app(settings: Settings | None = None):
         return {"id": work_id, "status": "pending"}
 
     @app.get("/api/images/{image_id}")
-    def image(image_id: str, request: Request):
+    def image(image_id: str, request: Request, size: str = "original"):
+        if size not in {"original", "thumb"}:
+            raise HTTPException(422, "无效图片尺寸")
         with db() as connection:
             row = connection.execute("SELECT i.*,w.status,w.user_id,w.category,u.disabled FROM images i JOIN works w ON w.id=i.work_id "
                                      "JOIN users u ON u.id=w.user_id WHERE i.id=? AND i.purged=0", (image_id,)).fetchone()
@@ -652,7 +669,7 @@ def create_app(settings: Settings | None = None):
             user = current_user(request)
             if user["id"] != row["user_id"] and (user["role"] not in {"owner", "admin"} or (user["role"] == "admin" and user["department"] and user["department"] != row["category"])):
                 raise HTTPException(404, "图片不存在")
-        return Response(storage.get(row["object_key"]), media_type="image/jpeg")
+        return Response(storage.get(row["object_key"], thumbnail=True) if size == "thumb" else storage.get(row["object_key"]), media_type="image/jpeg")
 
     @app.delete("/api/works/{work_id}")
     def delete_own(work_id: str, user=Depends(current_user)):

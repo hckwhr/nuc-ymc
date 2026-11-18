@@ -38,9 +38,9 @@ export function Pagination({ page, total, change }: { page: number; total: numbe
 export function WorkCard({ work, children }: { work: Work; children?: ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   return <article className="work-card">
-    {work.images.length > 0 && <button className="work-cover" onClick={() => setExpanded(true)} aria-label={`查看 ${work.title}`}><img src={`${API}/api/images/${work.images[0]}`} alt={work.title} loading="lazy" /></button>}
+    {work.images.length > 0 && <button className="work-cover" onClick={() => setExpanded(true)} aria-label={`查看 ${work.title}`}><img src={`${API}/api/images/${work.images[0]}?size=thumb`} alt={work.title} loading="lazy" /></button>}
     <div className="work-content"><div className="work-meta"><span>{departments[work.category as Department]?.name || work.category} · {work.branch || "其他"}</span><span className={`status ${work.status}`}>{statusName[work.status]}</span></div>
-      <h2>{work.title}</h2><p className="muted">{work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
+      <h2>{work.title}</h2><p className="muted">{work.creator_id ? <Link to={`/creators/${work.creator_id}`}>{work.nickname} ↗</Link> : work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
       {work.reason && <p className="notice">处理说明 · {work.reason}</p>}{children}</div>
     {work.status === "approved" && <div className="work-public-links"><span>{work.featured ? "编辑精选 · 已公开展示" : "已公开展示"}</span><Link to={`/works/${work.id}`}>作品详情 / 分享 ↗</Link><Link to="/#works">首页作品墙 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
     {expanded && <Lightbox items={work.images.map(id => ({ type: "image", src: `${API}/api/images/${id}`, caption: work.title }))} index={0} onClose={() => setExpanded(false)} />}

@@ -45,10 +45,18 @@ class Storage:
         else:
             self.bucket.put_object(key, data, headers={"x-oss-object-acl": "private", "Content-Type": "image/jpeg"})
 
-    def get(self, key):
+    def get(self, key, thumbnail=False):
         if self.local:
-            return (self.local / key.rsplit("/", 1)[-1]).read_bytes()
-        return self.bucket.get_object(key).read()
+            data = (self.local / key.rsplit("/", 1)[-1]).read_bytes()
+            if thumbnail:
+                with Image.open(io.BytesIO(data)) as picture:
+                    picture.thumbnail((640, 640))
+                    output = io.BytesIO()
+                    picture.convert('RGB').save(output, format='JPEG', quality=75)
+                    return output.getvalue()
+            return data
+        process = 'image/resize,m_lfit,w_640,h_640/quality,q_75/format,jpg' if thumbnail else None
+        return self.bucket.get_object(key, process=process).read()
 
     def delete(self, key):
         if self.local:
