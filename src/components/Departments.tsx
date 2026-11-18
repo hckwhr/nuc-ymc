@@ -11,8 +11,8 @@ export function Departments() {
     <section id="departments" className="mx-auto max-w-7xl px-6 py-24 sm:py-28">
       <SectionHead
         kicker="Departments"
-        title={<>七大<em className="not-italic text-coral">部门</em></>}
-        sub="各展所长，一起把青春讲成故事。摄影 / 设计 / 抖音 部门可点击进入专属展示站。"
+        title={<>八大<em className="not-italic text-coral">部门</em></>}
+        sub="各展所长，一起把青春讲成故事。点击部门卡片，探索作品、日常与学习资料。"
       />
 
       <div className="flex flex-wrap justify-center gap-5">

@@ -30,6 +30,7 @@ export const IconChevronRight = (p: SVGProps<SVGSVGElement>) => (
 );
 
 const DEPT: Record<string, JSX.Element> = {
+  study: <><path d="M12 5v16M12 5C9 3 5 3 3 4v15c3-1 6-1 9 2 3-3 6-3 9-2V4c-2-1-6-1-9 1z" /><path d="M6 8h3M15 8h3M6 12h3M15 12h3" /></>,
   photography: <><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.2l1-1.6A1 1 0 0 1 9.5 4h5a1 1 0 0 1 .85.5L16.3 6h2.2A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5z" /><circle cx="12" cy="12.5" r="3.5" /></>,
   design: <path d="M12 3l2.4 5 5.5.6-4.1 3.7 1.1 5.4L12 15.9 7.1 18.7l1.1-5.4L4.1 8.6 9.6 8z" />,
   douyin: <><path d="M9 8v8.5A3.5 3.5 0 1 1 5.5 13" /><path d="M9 8c0 2.5 2 4.5 5 4.5V9.2A4.2 4.2 0 0 1 15 4h-3" /></>,

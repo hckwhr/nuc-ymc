@@ -8,6 +8,7 @@ import Editorial from "./pages/Editorial";
 import Operation from "./pages/Operation";
 import WeChat from "./pages/WeChat";
 import General from "./pages/General";
+import Study from "./pages/Study";
 import Community, { Account, Privacy } from "./pages/Community";
 import Admin from "./pages/Admin";
 import Creator from "./pages/Creator";
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="/operation" element={<Operation />} />
         <Route path="/wechat" element={<WeChat />} />
         <Route path="/general" element={<General />} />
+        <Route path="/study" element={<Study />} />
         <Route path="*" element={<Home />} />
       </Routes>
       </CategoriesProvider>
