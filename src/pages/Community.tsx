@@ -7,6 +7,7 @@ import { logoSrc } from "../data/media";
 import "../community.css";
 import { NotificationLink } from "../components/NotificationLink";
 import { WorkSearch } from "../components/WorkSearch";
+import { Lightbox } from "../lib/Lightbox";
 
 export function CommunityLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -42,9 +43,7 @@ export function WorkCard({ work, children }: { work: Work; children?: ReactNode 
       <h2>{work.title}</h2><p className="muted">{work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
       {work.reason && <p className="notice">处理说明 · {work.reason}</p>}{children}</div>
     {work.status === "approved" && <div className="work-public-links"><span>{work.featured ? "编辑精选 · 已公开展示" : "已公开展示"}</span><Link to={`/works/${work.id}`}>作品详情 / 分享 ↗</Link><Link to="/#works">首页作品墙 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
-    {expanded && <div className="image-dialog" role="dialog" aria-modal="true" aria-label={work.title} onKeyDown={e => { if (e.key === "Escape") setExpanded(false); }}>
-      <button autoFocus className="dialog-close" onClick={() => setExpanded(false)}>关闭图片</button><div>{work.images.map(id => <img key={id} src={`${API}/api/images/${id}`} alt={work.title} />)}</div>
-    </div>}
+    {expanded && <Lightbox items={work.images.map(id => ({ type: "image", src: `${API}/api/images/${id}`, caption: work.title }))} index={0} onClose={() => setExpanded(false)} />}
   </article>;
 }
 
@@ -134,7 +133,7 @@ export function Account() {
     <div className="page-heading"><div><p className="eyebrow">{roleName[user.role]}</p><h1>我的创作空间</h1><p className="account-identity">登录用户名 <strong>@{user.username}</strong><span>公开昵称 · {user.nickname}</span></p></div>{user.role !== "user" && <Link className="button" to="/admin">进入管理后台</Link>}</div>
     <details className="account-settings"><summary>个人资料与账号安全</summary><form className="profile-form" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await api("/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }); await refresh(); setMessage("昵称已更新"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label>公开昵称<input value={nickname} required maxLength={32} onChange={e => setNickname(e.target.value)} /></label><button disabled={busy}>保存昵称</button></form>
     <PasswordForm /></details>
-    <SubmissionTree onSubmitted={() => { setVersion(v => v + 1); setPage(1); setQuery(""); setStatus(""); }} />
+    <SubmissionTree key={user.id} userId={user.id} onSubmitted={() => { setVersion(v => v + 1); setPage(1); setQuery(""); setStatus(""); }} />
     {error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
     <h2 className="section-title">我的作品</h2><WorkSearch value={query} onSearch={q => { setQuery(q); setPage(1); }} />
     <div className="filter-row"><label>作品状态<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">全部状态</option>{Object.entries(statusName).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><button disabled={fetching} onClick={() => setVersion(v => v + 1)}>刷新我的作品</button></div>
@@ -148,7 +147,7 @@ export function Privacy() {
     <h2>作品与公开范围</h2><p>投稿须为原创或已获授权的内容，请勿上传违法、侵权或包含未经同意的个人敏感信息的作品。作品审核通过后，图片、标题、简介和昵称会公开展示。用户名仅供本人和管理人员查看。图片处理会移除 EXIF 定位等元数据。</p>
     <h2>管理权限</h2><p>总管理员可任免管理员、设置管理部门、停用账号并查看管理记录。管理员可在授权范围内审核、退回和删除作品，以及调整分支。删除或退回须填写原因，操作会记录操作者和时间。账号被停用后，其作品暂停公开。</p>
     <h2>保存与删除</h2><p>登录和操作日志默认保留 180 天。作品删除后立即停止展示及访问，文件将在维护任务中清理。删除记录和必要的操作证据按日志期限保留。账号资料保存至注销处理完成，备份中的数据随备份轮换到期清理。你可以在个人中心修改昵称、删除作品，并联系网站运营方申请查阅、更正或注销账号。</p>
-    <h2>存储与安全</h2><p>生产服务使用阿里云香港资源存储账号与作品数据。登录状态使用安全 Cookie，不用于广告跟踪。请保护好自己的用户名和密码。</p>
+    <h2>存储与安全</h2><p>生产服务使用阿里云香港资源存储账号与作品数据。登录状态使用安全 Cookie，不用于广告跟踪。新投稿的文字、分类和图片文件名会按账号保存在当前浏览器，图片文件本身不保存；提交成功或点击“清空草稿”可清除。共用设备使用后请清空草稿。请保护好自己的用户名和密码。</p>
     <h2>联系</h2><p>账号和隐私相关请求请发送至 <a href="mailto:2625148973@qq.com">2625148973@qq.com</a>。</p>
   </article></CommunityLayout>;
 }

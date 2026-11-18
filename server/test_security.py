@@ -143,6 +143,18 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
 
+    def test_moderation_revision_prevents_stale_decision(self):
+        self.login(self.client, 'hck', 'Owner-password-123')
+        with self.app.state.db(write=True) as db:
+            db.execute("INSERT INTO works VALUES('review','owner-id','审核作品','','design','pending','',1,10,'海报')")
+        path = '/api/admin/works/review'
+        self.assertEqual(self.client.patch(path, json={'status':'approved','revision':9}).status_code, 409)
+        self.assertEqual(self.client.patch(path, json={'status':'approved','revision':10}).status_code, 200)
+        self.assertEqual(self.client.patch(path, json={'status':'rejected','reason':'旧页面','revision':10}).status_code, 409)
+        with self.app.state.db() as db:
+            self.assertEqual(db.execute("SELECT status FROM works WHERE id='review'").fetchone()[0], 'approved')
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM notifications WHERE work_id='review'").fetchone()[0], 1)
+
     def test_work_search_visibility_literal_query_and_status(self):
         member = self.register(self.client, 'secretusername')
         owner, visitor = self.new_client(), self.new_client()

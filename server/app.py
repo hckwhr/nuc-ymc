@@ -45,6 +45,7 @@ class ProfileRequest(BaseModel):
 class ModerationRequest(BaseModel):
     status: str = Field(pattern="^(approved|rejected|deleted)$")
     reason: str = Field(default="", max_length=500)
+    revision: int | None = None
 
 
 class RoleRequest(BaseModel):
@@ -787,6 +788,8 @@ def create_app(settings: Settings | None = None):
             check_department(user, work["category"])
             if work["status"] == "deleted":
                 raise HTTPException(409, "作品已经删除")
+            if body.revision is not None and body.revision != work["updated_at"]:
+                raise HTTPException(409, "作品已被修改或处理，请刷新后重新核对")
             if work["status"] == body.status and work["reason"] == body.reason.strip():
                 return {"ok": True}
             if body.status != "approved":

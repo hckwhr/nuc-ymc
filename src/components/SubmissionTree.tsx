@@ -1,9 +1,10 @@
-import { useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useCategories, type Department } from "../lib/categories";
 import { uploadWithProgress } from "../lib/community";
 import { photographyImages, designImages, douyinDaily } from "../data/media";
 
 import { ImagePicker, UploadProgress, type PickedImage } from "./ImagePicker";
+import { draftKey, readDraft } from "../lib/submissionDraft";
 
 const appearance = {
   photography: { color: "#38BDF8", tint: "#EAF7FE", image: photographyImages[0], subtitle: "定格光影，收藏瞬间" },
@@ -27,10 +28,15 @@ export function DepartmentFilters({ category, branch, onChange, onlyDepartment }
   </div>;
 }
 
-export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
+export function SubmissionTree({ onSubmitted, userId }: { onSubmitted: () => void; userId: string }) {
   const { departments, error: categoryError } = useCategories();
-  const [department, setDepartment] = useState<Department | null>(null);
-  const [branch, setBranch] = useState("");
+  const [initial] = useState(() => readDraft(userId));
+  const [department, setDepartment] = useState<Department | null>(() => Object.prototype.hasOwnProperty.call(appearance, initial.draft.department) ? initial.draft.department as Department : null);
+  const [branch, setBranch] = useState(initial.draft.branch);
+  const [title, setTitle] = useState(initial.draft.title), [description, setDescription] = useState(initial.draft.description);
+  const [missingImages, setMissingImages] = useState(initial.draft.imageNames);
+  const [draftMessage, setDraftMessage] = useState(initial.message);
+  const skipSave = useRef(true);
   const [items, setItems] = useState<PickedImage[]>([]);
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -39,6 +45,24 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
   const branchHeading = useRef<HTMLHeadingElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (skipSave.current) { skipSave.current = false; return; }
+    try {
+      if (!title && !description && !department && !branch && !items.length && !missingImages.length) localStorage.removeItem(draftKey(userId));
+      else localStorage.setItem(draftKey(userId), JSON.stringify({ title, description, department: department || "", branch, imageNames: items.length ? items.map(item => item.file!.name) : missingImages }));
+      setDraftMessage("文字和分类已保存到当前浏览器，图片文件未保存。共用设备使用后请清空草稿。");
+    } catch { setDraftMessage("本地草稿保存失败，请勿关闭页面，先复制文字留存。"); }
+  }, [userId, title, description, department, branch, items, missingImages]);
+  useEffect(() => {
+    if (!items.length && !busy) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [items.length, busy]);
+
+  function clearDraft() {
+    setTitle(""); setDescription(""); setDepartment(null); setBranch(""); setItems([]); setMissingImages([]); form.current?.reset();
+  }
 
   function chooseDepartment(value: Department) {
     setDepartment(value); setBranch(""); setError(""); setSuccess("");
@@ -47,7 +71,7 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setSuccess("");
-    if (!department || !branch) { setError("请先选择投稿部门和分支"); return; }
+    if (!department || !departments[department].branches.includes(branch)) { setError("分支已调整，请重新选择投稿分支"); return; }
     if (!items.length || items.length > 6) {
       setError("请选择 1 至 6 张图片，每张不超过 8 MB"); return;
     }
@@ -57,7 +81,7 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
     try {
       await uploadWithProgress("/works", data, setProgress);
       setSuccess(`已提交到${departments[department].name} · ${branch}，可在“我的作品”查看审核结果。`);
-      form.current?.reset(); setItems([]); onSubmitted();
+      clearDraft(); onSubmitted();
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
@@ -65,6 +89,9 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
   const theme = department ? appearance[department] : null;
   return <section className="submission-tree" aria-labelledby="submission-heading" style={{ "--branch-color": theme?.color || "#1A1A1A", "--branch-tint": theme?.tint || "#FFFFFF" } as CSSProperties}>
     <div className="tree-intro"><span className="tree-root-dot" /><h2 id="submission-heading">你的作品，从这里出发</h2><p>选一个部门，为灵感找到归属。</p></div>
+    <div className="draft-notice"><p role="status">{draftMessage}</p><button type="button" disabled={busy} onClick={() => { if (window.confirm("清空当前文字草稿及已选图片？此操作不会删除已提交的作品。")) clearDraft(); }}>清空草稿</button></div>
+    {missingImages.length > 0 && <p className="notice">上次选择的图片需要重新添加：{missingImages.join("、")}。请核对张数和封面后再提交。<button type="button" disabled={busy} onClick={() => setMissingImages([])}>知道了</button></p>}
+    {department && branch && !departments[department].branches.includes(branch) && <p className="notice">原分支“{branch}”已调整，请在下方重新选择，文字已保留。</p>}
     {categoryError && <p className="notice" role="status">{categoryError}</p>}
     <div className="department-nodes" aria-label="选择投稿部门">
       {(Object.keys(departments) as Department[]).map(key => <div className={`department-path ${department === key ? "selected" : ""}`} key={key} style={{ "--node-color": appearance[key].color } as CSSProperties}>
@@ -85,8 +112,8 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
       <fieldset disabled={busy}>
         <div className="submission-destination"><span>投稿到</span><strong>{department && departments[department].name}</strong><span aria-hidden="true">→</span><strong>{branch}</strong><button type="button" onClick={() => { setBranch(""); branchHeading.current?.focus(); }}>重选分支</button></div>
         <input type="hidden" name="category" value={department || ""} /><input type="hidden" name="branch" value={branch} />
-        <label>给作品起个名字<input ref={titleInput} name="title" placeholder="这一刻，你想留下什么？" required maxLength={100} /></label>
-        <label>作品背后的故事<textarea name="description" placeholder="聊聊灵感、拍摄地点，或你想表达的故事（选填）" maxLength={2000} rows={3} /></label>
+        <label>给作品起个名字<input ref={titleInput} name="title" value={title} onChange={e => setTitle(e.target.value)} placeholder="这一刻，你想留下什么？" required maxLength={100} /></label>
+        <label>作品背后的故事<textarea name="description" value={description} onChange={e => setDescription(e.target.value)} placeholder="聊聊灵感、拍摄地点，或你想表达的故事（选填）" maxLength={2000} rows={3} /></label>
         <ImagePicker items={items} onChange={setItems} disabled={busy} />
         {department === "douyin" && <p className="upload-format-note">当前支持封面、分镜和图文素材。视频文件上传暂未开放。</p>}
 
