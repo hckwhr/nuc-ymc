@@ -57,6 +57,12 @@ def main():
         app.state.storage.delete(image["object_key"])
         with app.state.db(write=True) as connection:
             connection.execute("UPDATE images SET purged=1 WHERE id=?", (image["id"],))
+    with app.state.db() as connection:
+        obsolete = connection.execute("SELECT object_key FROM obsolete_objects").fetchall()
+    for item in obsolete:
+        app.state.storage.delete(item["object_key"])
+        with app.state.db(write=True) as connection:
+            connection.execute("DELETE FROM obsolete_objects WHERE object_key=?", (item["object_key"],))
     cutoff = moment - settings.log_days * 86400
     with app.state.db(write=True) as connection:
         connection.execute("DELETE FROM sessions WHERE expires<=?", (moment,))

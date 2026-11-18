@@ -452,6 +452,99 @@ def create_app(settings: Settings | None = None):
             raise HTTPException(503, "作品保存失败，请稍后重试") from None
         return {"id": work_id, "status": "pending"}
 
+    @app.get("/api/my/works/{work_id}")
+    def editable_work(work_id: str, user=Depends(current_user)):
+        with db() as connection:
+            row = connection.execute("SELECT w.*,u.nickname,u.username FROM works w JOIN users u ON u.id=w.user_id "
+                                     "WHERE w.id=? AND w.user_id=? AND w.status!='deleted'", (work_id, user["id"])).fetchone()
+            if not row:
+                raise HTTPException(404, "作品不存在或不可编辑")
+            return serialize_work(connection, row, True)
+
+    @app.post("/api/works/{work_id}/revision")
+    async def revise_work(work_id: str, title: str = Form(min_length=1, max_length=100),
+                          description: str = Form(default="", max_length=2000), category: str = Form(),
+                          branch: str = Form(), rights: bool = Form(), revision: int = Form(),
+                          order: str = Form(max_length=1000), files: list[UploadFile] = File(default=[]),
+                          user=Depends(current_user)):
+        if not title.strip() or not rights or category not in CATEGORIES or not valid_branch(category, branch):
+            raise HTTPException(422, "请填写标题、有效分支并确认作品授权")
+        try:
+            manifest = json.loads(order)
+            if not isinstance(manifest, list) or not 1 <= len(manifest) <= 6 or not all(isinstance(item, str) for item in manifest):
+                raise ValueError()
+            if len(set(manifest)) != len(manifest) or len(files) > 6:
+                raise ValueError()
+            if {item for item in manifest if item.startswith('new:')} != {f'new:{index}' for index in range(len(files))}:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise HTTPException(422, "图片顺序无效，请保留 1 至 6 张图片") from None
+
+        def validate_current(connection):
+            work = connection.execute("SELECT w.*,u.disabled FROM works w JOIN users u ON u.id=w.user_id WHERE w.id=? AND w.user_id=?", (work_id, user["id"])).fetchone()
+            if not work or work["status"] == "deleted":
+                raise HTTPException(404, "作品不存在或不可编辑")
+            if work["disabled"]:
+                raise HTTPException(403, "账号不可用")
+            if work["updated_at"] != revision:
+                raise HTTPException(409, "作品状态已变化，请重新打开编辑页面后再提交")
+            existing = {row["id"]: row for row in connection.execute("SELECT * FROM images WHERE work_id=? AND purged=0", (work_id,))}
+            if any(item not in existing for item in manifest if not item.startswith('new:')):
+                raise HTTPException(422, "只能使用这件作品已有的图片")
+            return work, existing
+
+        with db(write=True) as connection:
+            validate_current(connection)
+            blocked = limited(connection, "upload:" + user["id"], 10, 86400)
+        if blocked:
+            raise HTTPException(429, "每日最多提交或修改 10 次作品，请明天再试")
+        images = []
+        async with upload_lock:
+            try:
+                for file in files:
+                    images.append(await run_in_threadpool(clean_image, await file.read(8 * 1024 * 1024 + 1)))
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from None
+            finally:
+                for file in files:
+                    await file.close()
+
+        def save_revision():
+            keys = []
+            try:
+                with db(write=True) as connection:
+                    work, existing = validate_current(connection)
+                    for position, item in enumerate(manifest):
+                        if item.startswith('new:'):
+                            data = images[int(item[4:])]
+                            image_id = str(uuid.uuid4())
+                            key = f"community/{work_id}/{image_id}.jpg"
+                            keys.append(key)
+                            storage.put(key, data)
+                            connection.execute("INSERT INTO images VALUES(?,?,?,?,?,0)", (image_id, work_id, key, position, len(data)))
+                        else:
+                            connection.execute("UPDATE images SET position=? WHERE id=?", (position, item))
+                    for image_id, row in existing.items():
+                        if image_id not in manifest:
+                            connection.execute("INSERT OR IGNORE INTO obsolete_objects VALUES(?,?)", (row["object_key"], now()))
+                            connection.execute("DELETE FROM images WHERE id=?", (image_id,))
+                    connection.execute("DELETE FROM featured_works WHERE work_id=?", (work_id,))
+                    connection.execute("UPDATE works SET title=?,description=?,category=?,branch=?,status='pending',reason='',updated_at=? WHERE id=?",
+                                       (title.strip(), description.strip(), category, branch, max(now(), work["updated_at"] + 1), work_id))
+                    audit(connection, user["id"], "revise", work_id, f"{title.strip()} · {work['status']} → pending")
+            except Exception:
+                if keys:
+                    with db(write=True) as connection:
+                        connection.executemany("INSERT OR IGNORE INTO obsolete_objects VALUES(?,?)", [(key, now()) for key in keys])
+                raise
+        try:
+            await run_in_threadpool(save_revision)
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(503, "修改保存失败，原作品未改变，请稍后重试") from None
+        return {"id": work_id, "status": "pending"}
+
     @app.get("/api/images/{image_id}")
     def image(image_id: str, request: Request):
         with db() as connection:
@@ -584,7 +677,7 @@ def create_app(settings: Settings | None = None):
                 return {"ok": True}
             if body.status != "approved":
                 connection.execute("DELETE FROM featured_works WHERE work_id=?", (work_id,))
-            connection.execute("UPDATE works SET status=?,reason=?,updated_at=? WHERE id=?", (body.status, body.reason.strip(), now(), work_id))
+            connection.execute("UPDATE works SET status=?,reason=?,updated_at=? WHERE id=?", (body.status, body.reason.strip(), max(now(), work["updated_at"] + 1), work_id))
             connection.execute("INSERT INTO notifications(user_id,work_id,title,status,reason,created_at) VALUES(?,?,?,?,?,?)",
                                (work["user_id"], work_id, work["title"], body.status, body.reason.strip(), now()))
             audit(connection, user["id"], body.status, work_id, json.dumps({"title": work["title"], "reason": body.reason.strip()}, ensure_ascii=False))

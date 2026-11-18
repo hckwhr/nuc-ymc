@@ -9,7 +9,7 @@ type Member = User & { work_count: number; login_count: number };
 type Login = { id: number; username: string; nickname: string; success: number; reason: string; ip_hash: string; device: string; created_at: number };
 type Audit = { id: number; username: string; nickname: string; action: string; target_id: string; detail: string; created_at: number };
 type Overview = { users: number; works: number; pending: number; logins: number };
-const actions: Record<string, string> = { feature: "设为首页精选", unfeature: "取消首页精选", create_branch: "创建分支", rename_owner: "修改总管理员用户名", password: "修改密码", reset_password: "重置密码", register: "注册", logout: "退出登录", profile: "修改昵称", upload: "上传作品", delete_own: "作者删除", approved: "审核通过", rejected: "退回作品", deleted: "管理员删除", role: "调整权限", disable: "停用账号", enable: "恢复账号" };
+const actions: Record<string, string> = { revise: "编辑并重新投稿", feature: "设为首页精选", unfeature: "取消首页精选", create_branch: "创建分支", rename_owner: "修改总管理员用户名", password: "修改密码", reset_password: "重置密码", register: "注册", logout: "退出登录", profile: "修改昵称", upload: "上传作品", delete_own: "作者删除", approved: "审核通过", rejected: "退回作品", deleted: "管理员删除", role: "调整权限", disable: "停用账号", enable: "恢复账号" };
 
 export default function Admin() {
   const { user, loading } = useAuth();

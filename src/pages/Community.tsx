@@ -115,7 +115,7 @@ export function Account() {
     <PasswordForm /></details>
     <SubmissionTree onSubmitted={() => { setVersion(v => v + 1); setPage(1); }} />
     {error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
-    <h2 className="section-title">我的作品</h2><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button>}</WorkCard>)}</div>{works.total === 0 && <p className="empty-state">你的投稿和审核结果会显示在这里。</p>}<Pagination page={page} total={works.total} change={setPage} />
+    <h2 className="section-title">我的作品</h2><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <div className="action-row"><Link className="button" to={`/account/works/${work.id}/edit`}>{work.status === "rejected" ? "修改并重新投稿" : "编辑作品"}</Link><button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button></div>}</WorkCard>)}</div>{works.total === 0 && <p className="empty-state">你的投稿和审核结果会显示在这里。</p>}<Pagination page={page} total={works.total} change={setPage} />
   </>}</CommunityLayout>;
 }
 

@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useCategories, type Department } from "../lib/categories";
-import { api } from "../lib/community";
+import { uploadWithProgress } from "../lib/community";
 import { photographyImages, designImages, douyinDaily } from "../data/media";
+
+import { ImagePicker, UploadProgress, type PickedImage } from "./ImagePicker";
 
 const appearance = {
   photography: { color: "#38BDF8", tint: "#EAF7FE", image: photographyImages[0], subtitle: "定格光影，收藏瞬间" },
@@ -29,20 +31,14 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
   const { departments, error: categoryError } = useCategories();
   const [department, setDepartment] = useState<Department | null>(null);
   const [branch, setBranch] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [items, setItems] = useState<PickedImage[]>([]);
+  const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const branchHeading = useRef<HTMLHeadingElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    const urls = files.map(file => URL.createObjectURL(file));
-    setPreviews(urls);
-    return () => urls.forEach(URL.revokeObjectURL);
-  }, [files]);
 
   function chooseDepartment(value: Department) {
     setDepartment(value); setBranch(""); setError(""); setSuccess("");
@@ -52,15 +48,16 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(""); setSuccess("");
     if (!department || !branch) { setError("请先选择投稿部门和分支"); return; }
-    if (!files.length || files.length > 6 || files.some(file => file.size > 8 * 1024 * 1024)) {
+    if (!items.length || items.length > 6) {
       setError("请选择 1 至 6 张图片，每张不超过 8 MB"); return;
     }
     const data = new FormData(event.currentTarget);
-    setBusy(true);
+    items.forEach(item => data.append("files", item.file!));
+    setBusy(true); setProgress(0);
     try {
-      await api("/works", { method: "POST", body: data });
+      await uploadWithProgress("/works", data, setProgress);
       setSuccess(`已提交到${departments[department].name} · ${branch}，可在“我的作品”查看审核结果。`);
-      form.current?.reset(); setFiles([]); onSubmitted();
+      form.current?.reset(); setItems([]); onSubmitted();
     } catch (error) { setError((error as Error).message); }
     finally { setBusy(false); }
   }
@@ -90,12 +87,13 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
         <input type="hidden" name="category" value={department || ""} /><input type="hidden" name="branch" value={branch} />
         <label>给作品起个名字<input ref={titleInput} name="title" placeholder="这一刻，你想留下什么？" required maxLength={100} /></label>
         <label>作品背后的故事<textarea name="description" placeholder="聊聊灵感、拍摄地点，或你想表达的故事（选填）" maxLength={2000} rows={3} /></label>
-        <label className="creative-dropzone"><span className="upload-symbol" aria-hidden="true">＋</span><strong>{files.length ? `已选择 ${files.length} 张图片` : "选择你的作品图片"}</strong><span>JPG / PNG / WebP · 每张不超过 8 MB · 最多 6 张</span><input name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple required onChange={e => { setFiles(Array.from(e.target.files || [])); setError(""); setSuccess(""); }} /></label>
+        <ImagePicker items={items} onChange={setItems} disabled={busy} />
         {department === "douyin" && <p className="upload-format-note">当前支持封面、分镜和图文素材。视频文件上传暂未开放。</p>}
-        <div className="selected-previews">{previews.map((src, index) => <figure key={src}><img src={src} alt={`待投稿图片 ${index + 1}`} /><figcaption>{files[index]?.name}</figcaption></figure>)}</div>
+
         <label className="checkbox-label"><input type="checkbox" name="rights" value="true" required /><span>作品为本人原创或已获授权，同意投稿规则。</span></label>
         <div className="submission-footer"><span>审核通过后，将同步展示在首页作品墙、所属部门和作品社区。</span><button className="primary" disabled={busy}>{busy ? "作品正在提交…" : `提交到${branch}`}<span aria-hidden="true">↗</span></button></div>
       </fieldset>
+      {busy && <UploadProgress value={progress} />}
     </form>
     {error && <p className="notice error" role="alert">{error}</p>}
     {success && <p className="notice submission-success" role="status">{success}</p>}

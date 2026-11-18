@@ -47,3 +47,6 @@ CREATE TABLE IF NOT EXISTS notifications (
  reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, read_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, id);
+CREATE TABLE IF NOT EXISTS obsolete_objects (
+ object_key TEXT PRIMARY KEY, created_at INTEGER NOT NULL
+);

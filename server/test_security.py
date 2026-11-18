@@ -2,6 +2,8 @@ import io
 import tempfile
 import sqlite3
 import unittest
+import json
+from unittest.mock import patch
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -140,6 +142,61 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT work_id FROM images').fetchone()[0], 'existing-work')
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
+
+    def test_edit_resubmit_order_ownership_and_atomic_failure(self):
+        author = self.register(self.client, 'creator1')
+        owner, visitor = self.new_client(), self.new_client()
+        self.login(owner, 'hck', 'Owner-password-123')
+        picture = io.BytesIO()
+        Image.new('RGB', (20, 20), 'blue').save(picture, 'PNG')
+        upload = self.client.post('/api/works', data={'title': '原作品', 'category': 'photography', 'branch': '自然风光', 'rights': 'true'}, files=[('files', ('one.png', picture.getvalue(), 'image/png')), ('files', ('two.png', picture.getvalue(), 'image/png'))])
+        self.assertEqual(upload.status_code, 201)
+        work_id = upload.json()['id']
+        path = '/api/works/' + work_id + '/revision'
+        get_path = '/api/my/works/' + work_id
+        self.assertEqual(visitor.get(get_path).status_code, 401)
+        self.assertEqual(owner.get(get_path).status_code, 404)
+        owner.patch('/api/admin/works/' + work_id, json={'status': 'approved'})
+        owner.patch('/api/admin/works/' + work_id + '/featured', json={'featured': True})
+        old = self.client.get(get_path).json()
+        data = {'title': '新作品', 'description': '补充说明', 'category': 'design', 'branch': '海报', 'rights': 'true', 'revision': old['updated_at'], 'order': json.dumps([old['images'][1], old['images'][0]])}
+        self.assertEqual(owner.post(path, data=data).status_code, 404)
+        self.assertEqual(self.client.post(path, data=data, headers={'X-CSRF-Token': 'bad'}).status_code, 403)
+        self.assertEqual(self.client.post(path, data={**data, 'order': '["foreign-image"]'}).status_code, 422)
+        self.assertEqual(self.client.post(path, data={**data, 'order': '[]'}).status_code, 422)
+        self.assertEqual(self.client.post(path, data={**data, 'order': json.dumps([old['images'][0]] * 2)}).status_code, 422)
+        self.assertEqual(self.client.post(path, data=data).status_code, 200)
+        edited = self.client.get(get_path).json()
+        self.assertEqual(edited['images'], list(reversed(old['images'])))
+        self.assertEqual(edited['status'], 'pending')
+        self.assertFalse(edited['featured'])
+        self.assertEqual(visitor.get('/api/works/' + work_id).status_code, 404)
+        self.assertEqual(self.client.post(path, data=data).status_code, 409)
+        owner.patch('/api/admin/works/' + work_id, json={'status': 'rejected', 'reason': '请补充图片'})
+        rejected = self.client.get(get_path).json()
+        data.update(revision=rejected['updated_at'], order=json.dumps(['new:0', old['images'][1]]))
+        with patch.object(self.app.state.storage, 'put', side_effect=RuntimeError('simulated storage failure')):
+            response = self.client.post(path, data=data, files={'files': ('new.png', picture.getvalue(), 'image/png')})
+        self.assertEqual(response.status_code, 503)
+        unchanged = self.client.get(get_path).json()
+        self.assertEqual(unchanged, rejected)
+        self.assertEqual(self.client.post(path, data=data, files={'files': ('bad.png', b'not an image', 'image/png')}).status_code, 422)
+        self.assertEqual(self.client.post(path, data=data, files={'files': ('new.png', picture.getvalue(), 'image/png')}).status_code, 200)
+        updated = self.client.get(get_path).json()
+        self.assertEqual(updated['id'], work_id)
+        self.assertEqual(updated['status'], 'pending')
+        self.assertEqual(updated['reason'], '')
+        self.assertEqual(updated['images'][1], old['images'][1])
+        self.assertNotIn(updated['images'][0], old['images'])
+        self.assertEqual(self.client.get('/api/images/' + old['images'][0]).status_code, 404)
+        with self.app.state.db() as db:
+            self.assertGreaterEqual(db.execute('SELECT COUNT(*) FROM obsolete_objects').fetchone()[0], 2)
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+        owner.patch('/api/admin/works/' + work_id, json={'status': 'approved'})
+        self.assertEqual(visitor.get('/api/works/' + work_id).json()['images'][0], updated['images'][0])
+        self.client.delete('/api/works/' + work_id)
+        self.assertEqual(self.client.post(path, data={**data, 'revision': updated['updated_at'], 'order': json.dumps(updated['images'])}).status_code, 404)
+        owner.close(); visitor.close()
 
     def test_details_featured_and_private_notifications(self):
         owner, visitor = self.new_client(), self.new_client()
