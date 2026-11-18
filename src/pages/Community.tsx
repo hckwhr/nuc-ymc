@@ -10,7 +10,12 @@ export function CommunityLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [error, setError] = useState("");
   return <div className="community-shell">
-    <header className="community-header"><Link to="/" className="community-brand"><img src={logoSrc} alt="" />青年媒体中心</Link><nav aria-label="创作导航">
+    <header className="community-header"><Link to="/" className="community-brand" aria-label="青年媒体中心，返回首页"><img src={logoSrc} alt="" />青年媒体中心</Link>
+    <nav className="community-home-nav" aria-label="主站导航">
+      <Link to="/" className="community-home-link"><span aria-hidden="true">↖</span> 返回首页</Link>
+      <Link to="/#about">中心简介</Link><Link to="/#departments">部门展示</Link><Link to="/#works">作品墙</Link>
+    </nav>
+    <nav className="community-account-nav" aria-label="创作导航">
       <Link to="/community">作品社区</Link><Link to="/account">{user ? "投稿 / 我的作品" : "登录"}</Link>
       {!user && <Link className="header-register" to="/account?mode=register">注册账号</Link>}
       {user && <span className="header-identity">@{user.username}</span>}

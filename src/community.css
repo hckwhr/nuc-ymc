@@ -2,6 +2,19 @@
 .community-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding: 22px max(24px, calc((100vw - 1240px) / 2)); background: #FFFFFF; border-bottom: 1px solid #ECE9E1; }
 .community-brand { font-weight: 700; font-size: 21px; }
 .community-header nav { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; font-size: 14px; }
+.community-header { gap: 18px 24px; }
+.community-header .community-home-nav { gap: 18px; }
+.community-home-nav a { white-space: nowrap; color: #6f6f6f; }
+.community-home-nav a:hover { color: #1a1a1a; }
+.community-home-nav .community-home-link { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; background: #fff0ea; color: #9b4934; font-weight: 600; }
+.community-header .community-account-nav { gap: 16px; }
+@media (max-width: 1200px) {
+  .community-header .community-account-nav { flex-basis: 100%; padding-top: 14px; border-top: 1px solid #ece9e1; }
+}
+@media (max-width: 600px) {
+  .community-header .community-home-nav { flex-basis: 100%; gap: 12px; font-size: 13px; }
+  .community-home-nav .community-home-link { padding: 8px 10px; }
+}
 .community-main { max-width: 1240px; margin: auto; padding: 48px 24px 80px; }
 .community-footer { max-width: 1240px; margin: auto; padding: 24px; border-top: 1px solid #ECE9E1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-size: 13px; color: #6F6F6F; }
 .community-shell h1 { font-size: clamp(30px, 4vw, 45px); line-height: 1.25; font-weight: 600; margin: 10px 0 16px; letter-spacing: -.03em; }
