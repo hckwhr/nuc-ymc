@@ -50,3 +50,12 @@ CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, id);
 CREATE TABLE IF NOT EXISTS obsolete_objects (
  object_key TEXT PRIMARY KEY, created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS admin_departments (
+ user_id TEXT PRIMARY KEY REFERENCES users(id),
+ category TEXT NOT NULL CHECK(category IN ('photography','design','douyin'))
+);
+CREATE TABLE IF NOT EXISTS branch_aliases (
+ category TEXT NOT NULL, old_name TEXT NOT NULL, name TEXT NOT NULL,
+ PRIMARY KEY(category, old_name)
+);
+CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY);

@@ -1,6 +1,13 @@
 .community-shell { min-height: 100vh; background: #FAFAF7; color: #1A1A1A; }
 .community-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding: 22px max(24px, calc((100vw - 1240px) / 2)); background: #FFFFFF; border-bottom: 1px solid #ECE9E1; }
 .community-brand { font-weight: 700; font-size: 21px; }
+.managed-branches { display: grid; gap: 12px; }
+.managed-branch { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding: 16px; border: 1px solid #ece9e1; border-radius: 12px; }
+.managed-branch > a { min-width: 0; overflow-wrap: anywhere; }
+.managed-branch .action-row { margin-top: 0; }
+.branch-change-panel { margin-top: 24px; border-top: 1px solid #ece9e1; padding-top: 10px; }
+.branch-change-panel p { color: #6f6f6f; font-size: 13px; margin-bottom: 18px; }
+.admin-scope { display: grid; gap: 8px; width: 100%; min-width: 160px; }
 .edit-work-fields { display: grid; gap: 22px; min-width: 0; }
 .editable-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; margin-top: 20px; }
 .editable-previews figure { min-width: 0; border: 1px solid #ece9e1; border-radius: 14px; padding: 10px; background: #fff; }

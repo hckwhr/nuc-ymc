@@ -23,6 +23,7 @@ export function CategoryGallery({
     <>
       {categories.map((cat) => (
         <div key={cat.name || "all"} id={cat.name ? `cat-${cat.name}` : undefined} className="mb-16 scroll-mt-24 last:mb-0">
+          {department && Object.entries(departments[department].aliases || {}).filter(([, name]) => name === cat.name).map(([old]) => <span key={old} id={`cat-${old}`} className="block scroll-mt-24" />)}
           {cat.name && (
             <Reveal>
               <div className="mb-6 flex flex-wrap items-center gap-3">

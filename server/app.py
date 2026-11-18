@@ -49,6 +49,7 @@ class ModerationRequest(BaseModel):
 
 class RoleRequest(BaseModel):
     role: str = Field(pattern="^(admin|user)$")
+    department: str | None = None
 
 
 class DisableRequest(BaseModel):
@@ -62,6 +63,15 @@ class BranchRequest(BaseModel):
 
 class FeaturedRequest(BaseModel):
     featured: bool
+
+
+class BranchChangeRequest(BranchRequest):
+    target: str = Field(min_length=1, max_length=30)
+
+
+class BranchOrderRequest(BaseModel):
+    category: str
+    names: list[str] = Field(min_length=1, max_length=50)
 
 
 def create_app(settings: Settings | None = None):
@@ -94,9 +104,17 @@ def create_app(settings: Settings | None = None):
             raise ValueError("OWNER_USERNAME differs from the existing owner; use a reviewed account migration")
     migrate_departments(database)
     with db(write=True) as connection:
-        for category, definition in CATEGORIES.items():
-            connection.executemany("INSERT OR IGNORE INTO branches VALUES(?,?,0)",
-                                   [(category, name) for name in definition["branches"]])
+        if 'position' not in {row['name'] for row in connection.execute('PRAGMA table_info(branches)')}:
+            connection.execute('ALTER TABLE branches ADD COLUMN position INTEGER NOT NULL DEFAULT 0')
+            for category in CATEGORIES:
+                rows = connection.execute('SELECT name FROM branches WHERE category=? ORDER BY created_at,rowid', (category,)).fetchall()
+                for position, row in enumerate(rows):
+                    connection.execute('UPDATE branches SET position=? WHERE category=? AND name=?', (position, category, row['name']))
+        if not connection.execute("SELECT 1 FROM app_migrations WHERE name='branch-seed-v1'").fetchone():
+            for category, definition in CATEGORIES.items():
+                connection.executemany("INSERT OR IGNORE INTO branches(category,name,created_at,position) VALUES(?,?,0,?)",
+                                       [(category, name, index) for index, name in enumerate(definition["branches"])])
+            connection.execute("INSERT INTO app_migrations VALUES('branch-seed-v1')")
 
     app = FastAPI(title="青年媒体中心", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db = db
@@ -133,13 +151,17 @@ def create_app(settings: Settings | None = None):
         return False
 
     def public_user(row):
-        return {key: row[key] for key in ("id", "username", "nickname", "role", "disabled", "created_at", "last_login", "must_change_password")}
+        result = {key: row[key] for key in ("id", "username", "nickname", "role", "disabled", "created_at", "last_login", "must_change_password")}
+        with db() as connection:
+            scope = connection.execute('SELECT category FROM admin_departments WHERE user_id=?', (row['id'],)).fetchone()
+        result['department'] = scope['category'] if scope and row['role'] == 'admin' else None
+        return result
 
     def current_user(request: Request):
         token = request.cookies.get(cookie_name, "")
         with db() as connection:
             row = connection.execute(
-                "SELECT u.*,s.csrf,s.created_at AS session_created FROM sessions s JOIN users u ON u.id=s.user_id "
+                "SELECT u.*,s.csrf,s.created_at AS session_created,(SELECT category FROM admin_departments WHERE user_id=u.id) AS department FROM sessions s JOIN users u ON u.id=s.user_id "
                 "WHERE s.digest=? AND s.expires>? AND u.disabled=0", (digest(token), now())).fetchone()
         if not token or not row:
             raise HTTPException(401, "请先登录")
@@ -154,6 +176,15 @@ def create_app(settings: Settings | None = None):
         if user["role"] not in {"owner", "admin"}:
             raise HTTPException(403, "需要管理员权限")
         return user
+
+    def full_administrator(user=Depends(administrator)):
+        if user['role'] != 'owner' and user['department']:
+            raise HTTPException(403, '部门管理员不能查看全站用户、登录记录或操作审计')
+        return user
+
+    def check_department(user, category):
+        if user['role'] != 'owner' and user['department'] and user['department'] != category:
+            raise HTTPException(403, '只能管理被分配部门的作品与分支')
 
     def owner(user=Depends(current_user)):
         if user["role"] != "owner":
@@ -192,9 +223,11 @@ def create_app(settings: Settings | None = None):
     @app.get("/api/categories")
     def categories():
         with db() as connection:
-            result = {key: {"name": value["name"], "branches": [], "counts": {}} for key, value in CATEGORIES.items()}
-            for row in connection.execute("SELECT category,name FROM branches ORDER BY created_at,rowid"):
+            result = {key: {"name": value["name"], "branches": [], "counts": {}, "aliases": {}} for key, value in CATEGORIES.items()}
+            for row in connection.execute("SELECT category,name FROM branches ORDER BY position,created_at,rowid"):
                 result[row["category"]]["branches"].append(row["name"])
+            for row in connection.execute('SELECT * FROM branch_aliases'):
+                result[row['category']]['aliases'][row['old_name']] = row['name']
             for row in connection.execute("SELECT w.category,w.branch,COUNT(*) AS total FROM works w JOIN users u ON u.id=w.user_id "
                                           "WHERE w.status='approved' AND u.disabled=0 GROUP BY w.category,w.branch"):
                 result[row["category"]]["counts"][row["branch"]] = row["total"]
@@ -202,17 +235,57 @@ def create_app(settings: Settings | None = None):
 
     @app.post("/api/admin/branches", status_code=201)
     def create_branch(body: BranchRequest, user=Depends(administrator)):
+        check_department(user, body.category)
         name = body.name.strip()
         if body.category not in CATEGORIES or not name or any(ord(c) < 32 or ord(c) == 127 for c in name):
             raise HTTPException(422, "请选择部门并填写 1 至 30 个可显示字符的分支名称")
         with db(write=True) as connection:
-            if connection.execute("SELECT 1 FROM branches WHERE category=? AND name=?", (body.category, name)).fetchone():
+            if connection.execute("SELECT 1 FROM branches WHERE category=? AND name=?", (body.category, name)).fetchone() or connection.execute('SELECT 1 FROM branch_aliases WHERE category=? AND old_name=?', (body.category, name)).fetchone():
                 raise HTTPException(409, "该部门已有同名分支")
             if connection.execute("SELECT COUNT(*) FROM branches WHERE category=?", (body.category,)).fetchone()[0] >= 50:
                 raise HTTPException(409, "每个部门最多 50 个分支")
-            connection.execute("INSERT INTO branches VALUES(?,?,?)", (body.category, name, now()))
+            position = connection.execute('SELECT COALESCE(MAX(position),-1)+1 FROM branches WHERE category=?', (body.category,)).fetchone()[0]
+            connection.execute("INSERT INTO branches(category,name,created_at,position) VALUES(?,?,?,?)", (body.category, name, now(), position))
             audit(connection, user["id"], "create_branch", body.category, name)
         return {"category": body.category, "name": name}
+
+    @app.patch('/api/admin/branches/order')
+    def order_branches(body: BranchOrderRequest, user=Depends(administrator)):
+        check_department(user, body.category)
+        if body.category not in CATEGORIES:
+            raise HTTPException(422, '无效部门')
+        with db(write=True) as connection:
+            existing = {row['name'] for row in connection.execute('SELECT name FROM branches WHERE category=?', (body.category,))}
+            if len(set(body.names)) != len(body.names) or set(body.names) != existing:
+                raise HTTPException(409, '分支列表已变化，请刷新后重新排序')
+            connection.executemany('UPDATE branches SET position=? WHERE category=? AND name=?', [(i, body.category, name) for i, name in enumerate(body.names)])
+            audit(connection, user['id'], 'branch_order', body.category, json.dumps(body.names, ensure_ascii=False))
+        return {'ok': True}
+
+    @app.patch('/api/admin/branches/{action}')
+    def change_branch(action: str, body: BranchChangeRequest, user=Depends(administrator)):
+        check_department(user, body.category)
+        source, target = body.name.strip(), body.target.strip()
+        if action not in {'rename', 'merge'} or body.category not in CATEGORIES or not source or not target or source == target or any(ord(c) < 32 or ord(c) == 127 for c in target):
+            raise HTTPException(422, '请填写有效且不同的分支名称')
+        with db(write=True) as connection:
+            old = connection.execute('SELECT * FROM branches WHERE category=? AND name=?', (body.category, source)).fetchone()
+            destination = connection.execute('SELECT * FROM branches WHERE category=? AND name=?', (body.category, target)).fetchone()
+            if not old:
+                raise HTTPException(409, '原分支已变化，请刷新')
+            if action == 'merge' and not destination:
+                raise HTTPException(422, '请选择同部门已有的目标分支')
+            if action == 'rename':
+                if destination or connection.execute('SELECT 1 FROM branch_aliases WHERE category=? AND old_name=?', (body.category, target)).fetchone():
+                    raise HTTPException(409, '名称已使用或为历史分支名，请换一个名称')
+                connection.execute('INSERT INTO branches(category,name,created_at,position) VALUES(?,?,?,?)', (body.category, target, old['created_at'], old['position']))
+            count = connection.execute('SELECT COUNT(*) FROM works WHERE category=? AND branch=?', (body.category, source)).fetchone()[0]
+            connection.execute('UPDATE works SET branch=?,updated_at=MAX(updated_at+1,?) WHERE category=? AND branch=?', (target, now(), body.category, source))
+            connection.execute('UPDATE branch_aliases SET name=? WHERE category=? AND name=?', (target, body.category, source))
+            connection.execute('INSERT INTO branch_aliases VALUES(?,?,?)', (body.category, source, target))
+            connection.execute('DELETE FROM branches WHERE category=? AND name=?', (body.category, source))
+            audit(connection, user['id'], 'branch_' + action, body.category, json.dumps({'from': source, 'to': target, 'works': count}, ensure_ascii=False))
+        return {'ok': True, 'works': count}
 
     def issue_session(connection, user, request, response):
         token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
@@ -421,6 +494,8 @@ def create_app(settings: Settings | None = None):
             keys = []
             try:
                 with db(write=True) as connection:
+                    if not connection.execute("SELECT 1 FROM branches WHERE category=? AND name=?", (category, branch)).fetchone():
+                        raise HTTPException(409, "分支已调整，请刷新后重新选择")
                     active = connection.execute("SELECT disabled FROM users WHERE id=?", (user["id"],)).fetchone()
                     if active["disabled"]:
                         raise HTTPException(403, "账号不可用")
@@ -481,6 +556,8 @@ def create_app(settings: Settings | None = None):
             raise HTTPException(422, "图片顺序无效，请保留 1 至 6 张图片") from None
 
         def validate_current(connection):
+            if not connection.execute("SELECT 1 FROM branches WHERE category=? AND name=?", (category, branch)).fetchone():
+                raise HTTPException(409, "分支已调整，请刷新后重新选择")
             work = connection.execute("SELECT w.*,u.disabled FROM works w JOIN users u ON u.id=w.user_id WHERE w.id=? AND w.user_id=?", (work_id, user["id"])).fetchone()
             if not work or work["status"] == "deleted":
                 raise HTTPException(404, "作品不存在或不可编辑")
@@ -548,13 +625,13 @@ def create_app(settings: Settings | None = None):
     @app.get("/api/images/{image_id}")
     def image(image_id: str, request: Request):
         with db() as connection:
-            row = connection.execute("SELECT i.*,w.status,w.user_id,u.disabled FROM images i JOIN works w ON w.id=i.work_id "
+            row = connection.execute("SELECT i.*,w.status,w.user_id,w.category,u.disabled FROM images i JOIN works w ON w.id=i.work_id "
                                      "JOIN users u ON u.id=w.user_id WHERE i.id=? AND i.purged=0", (image_id,)).fetchone()
         if not row or row["status"] == "deleted":
             raise HTTPException(404, "图片不存在")
         if row["status"] != "approved" or row["disabled"]:
             user = current_user(request)
-            if user["id"] != row["user_id"] and user["role"] not in {"owner", "admin"}:
+            if user["id"] != row["user_id"] and (user["role"] not in {"owner", "admin"} or (user["role"] == "admin" and user["department"] and user["department"] != row["category"])):
                 raise HTTPException(404, "图片不存在")
         return Response(storage.get(row["object_key"]), media_type="image/jpeg")
 
@@ -573,6 +650,14 @@ def create_app(settings: Settings | None = None):
     @app.get("/api/admin/overview")
     def overview(user=Depends(administrator)):
         with db() as connection:
+            if user['role'] == 'admin' and user['department']:
+                category = user['department']
+                return {
+                    'users': connection.execute("SELECT COUNT(DISTINCT user_id) FROM works WHERE category=? AND status!='deleted'", (category,)).fetchone()[0],
+                    'works': connection.execute("SELECT COUNT(*) FROM works WHERE category=? AND status!='deleted'", (category,)).fetchone()[0],
+                    'pending': connection.execute("SELECT COUNT(*) FROM works WHERE category=? AND status='pending'", (category,)).fetchone()[0],
+                    'logins': None,
+                }
             return {
                 "users": connection.execute("SELECT COUNT(*) FROM users").fetchone()[0],
                 "works": connection.execute("SELECT COUNT(*) FROM works WHERE status!='deleted'").fetchone()[0],
@@ -581,7 +666,7 @@ def create_app(settings: Settings | None = None):
             }
 
     @app.get("/api/admin/users")
-    def users(q: str = "", page: int = 1, user=Depends(administrator)):
+    def users(q: str = "", page: int = 1, user=Depends(full_administrator)):
         if len(q) > 100 or page < 1 or page > 100000:
             raise HTTPException(422, "无效查询条件")
         with db() as connection:
@@ -595,6 +680,8 @@ def create_app(settings: Settings | None = None):
 
     @app.patch("/api/admin/users/{user_id}/role")
     def change_role(user_id: str, body: RoleRequest, user=Depends(owner)):
+        if body.department is not None and body.department not in CATEGORIES:
+            raise HTTPException(422, "无效管理部门")
         with db(write=True) as connection:
             target = connection.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
             if not target:
@@ -602,8 +689,11 @@ def create_app(settings: Settings | None = None):
             if target["role"] == "owner":
                 raise HTTPException(403, "总管理员身份不可在此修改")
             connection.execute("UPDATE users SET role=? WHERE id=?", (body.role, user_id))
+            connection.execute("DELETE FROM admin_departments WHERE user_id=?", (user_id,))
+            if body.role == "admin" and body.department:
+                connection.execute("INSERT INTO admin_departments VALUES(?,?)", (user_id, body.department))
             connection.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
-            audit(connection, user["id"], "role", user_id, target["role"] + " → " + body.role)
+            audit(connection, user["id"], "role", user_id, target["role"] + " → " + body.role + " / " + (body.department or "全站"))
         return {"ok": True}
 
     @app.patch("/api/admin/users/{user_id}/disabled")
@@ -624,6 +714,9 @@ def create_app(settings: Settings | None = None):
         if status not in {"", "pending", "approved", "rejected", "deleted"} or page < 1 or page > 100000:
             raise HTTPException(422, "无效查询条件")
         where, params = ["1=1"], []
+        if user["role"] == "admin" and user["department"]:
+            where.append("w.category=?")
+            params.append(user["department"])
         if category and category not in CATEGORIES:
             raise HTTPException(422, "无效部门")
         if branch and not valid_branch(category, branch):
@@ -649,6 +742,7 @@ def create_app(settings: Settings | None = None):
             work = connection.execute("SELECT w.*,u.disabled FROM works w JOIN users u ON u.id=w.user_id WHERE w.id=?", (work_id,)).fetchone()
             if not work:
                 raise HTTPException(404, "作品不存在")
+            check_department(user, work["category"])
             if body.featured:
                 if work["status"] != "approved" or work["disabled"]:
                     raise HTTPException(409, "仅可精选正常账号的公开作品")
@@ -671,6 +765,7 @@ def create_app(settings: Settings | None = None):
             work = connection.execute("SELECT * FROM works WHERE id=?", (work_id,)).fetchone()
             if not work:
                 raise HTTPException(404, "作品不存在")
+            check_department(user, work["category"])
             if work["status"] == "deleted":
                 raise HTTPException(409, "作品已经删除")
             if work["status"] == body.status and work["reason"] == body.reason.strip():
@@ -684,7 +779,7 @@ def create_app(settings: Settings | None = None):
         return {"ok": True}
 
     @app.get("/api/admin/logins")
-    def logins(user_id: str = "", page: int = 1, user=Depends(administrator)):
+    def logins(user_id: str = "", page: int = 1, user=Depends(full_administrator)):
         if page < 1 or page > 100000:
             raise HTTPException(422, "无效页码")
         where, params = ("l.user_id=?", (user_id,)) if user_id else ("1=1", ())
@@ -695,7 +790,7 @@ def create_app(settings: Settings | None = None):
         return {"items": [dict(row) for row in rows], "total": total, "page": page}
 
     @app.get("/api/admin/audit")
-    def audit_log(page: int = 1, user=Depends(administrator)):
+    def audit_log(page: int = 1, user=Depends(full_administrator)):
         if page < 1 or page > 100000:
             raise HTTPException(422, "无效页码")
         with db() as connection:

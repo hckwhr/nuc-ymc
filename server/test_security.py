@@ -143,6 +143,68 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
 
+    def test_scoped_administrator_and_branch_lifecycle(self):
+        owner, visitor = self.new_client(), self.new_client()
+        self.login(owner, 'hck', 'Owner-password-123')
+        member = self.register(self.client, 'deptadmin')
+        with self.app.state.db(write=True) as db:
+            for category, branch in [('photography', '自然风光'), ('design', '海报')]:
+                db.execute("INSERT INTO works VALUES(?,?,?,'',?,'pending','',1,1,?)", (category, member['id'], category, category, branch))
+                db.execute("INSERT INTO images VALUES(?,?,?,?,1,0)", (category + '-image', category, category + '.jpg', 0))
+                self.app.state.storage.put(category + '.jpg', b'private-image')
+        self.assertEqual(owner.patch('/api/admin/users/' + member['id'] + '/role', json={'role': 'admin', 'department': 'photography'}).status_code, 200)
+        self.assertEqual(self.client.get('/api/auth/me').status_code, 401)
+        self.login(self.client, 'deptadmin', 'User-password-123')
+        self.assertEqual(self.client.get('/api/auth/me').json()['user']['department'], 'photography')
+        for path in ('users', 'logins', 'audit'):
+            self.assertEqual(self.client.get('/api/admin/' + path).status_code, 403)
+        overview = self.client.get('/api/admin/overview').json()
+        self.assertEqual(overview['works'], 1)
+        self.assertIsNone(overview['logins'])
+        self.assertEqual(self.client.get('/api/admin/works').json()['total'], 1)
+        self.assertEqual(self.client.get('/api/admin/works?category=design').json()['total'], 0)
+        self.assertEqual(self.client.patch('/api/admin/works/design', json={'status': 'approved'}).status_code, 403)
+        # Use an author other than the department admin to check private image isolation.
+        with self.app.state.db(write=True) as db:
+            db.execute("UPDATE works SET user_id='owner-id'")
+        self.assertEqual(self.client.get('/api/images/design-image').status_code, 404)
+        self.assertEqual(self.client.get('/api/images/photography-image').status_code, 200)
+        self.assertEqual(self.client.patch('/api/admin/works/design/featured', json={'featured': True}).status_code, 403)
+        self.assertEqual(self.client.post('/api/admin/branches', json={'category': 'design', 'name': '禁止'}).status_code, 403)
+        self.assertEqual(self.client.patch('/api/admin/branches/rename', json={'category': 'design', 'name': '海报', 'target': '禁止'}).status_code, 403)
+        rename = {'category': 'photography', 'name': '自然风光', 'target': '校园风景'}
+        self.assertEqual(self.client.patch('/api/admin/branches/rename', json=rename, headers={'X-CSRF-Token': 'bad'}).status_code, 403)
+        self.assertEqual(self.client.patch('/api/admin/branches/rename', json=rename).status_code, 200)
+        categories = visitor.get('/api/categories').json()['photography']
+        self.assertNotIn('自然风光', categories['branches'])
+        self.assertEqual(categories['aliases']['自然风光'], '校园风景')
+        self.assertEqual(self.client.post('/api/admin/branches', json={'category': 'photography', 'name': '自然风光'}).status_code, 409)
+        self.assertEqual(self.client.patch('/api/admin/branches/merge', json={'category': 'photography', 'name': '校园风景', 'target': '城市漫步'}).status_code, 200)
+        categories = visitor.get('/api/categories').json()['photography']
+        self.assertEqual(categories['aliases']['自然风光'], '城市漫步')
+        self.assertEqual(categories['aliases']['校园风景'], '城市漫步')
+        names = list(reversed(categories['branches']))
+        self.assertEqual(self.client.patch('/api/admin/branches/order', json={'category': 'photography', 'names': names}).status_code, 200)
+        self.assertEqual(self.client.patch('/api/admin/branches/order', json={'category': 'photography', 'names': names[:-1]}).status_code, 409)
+        self.assertEqual(self.client.patch('/api/admin/works/photography', json={'status': 'approved'}).status_code, 200)
+        self.assertEqual(self.client.patch('/api/admin/works/photography/featured', json={'featured': True}).status_code, 200)
+        with self.app.state.db() as db:
+            work = db.execute("SELECT * FROM works WHERE id='photography'").fetchone()
+            self.assertEqual(work['branch'], '城市漫步')
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM images').fetchone()[0], 2)
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+        restarted = create_app(Settings(environment='test', data_dir=Path(self.temp.name), secret='x' * 40, storage='local', origins=('https://site.test',)))
+        with TestClient(restarted) as client:
+            self.assertEqual(client.get('/api/categories').json()['photography']['branches'], names)
+        owner.patch('/api/admin/users/' + member['id'] + '/role', json={'role': 'admin', 'department': 'design'})
+        self.assertEqual(self.client.get('/api/admin/works').status_code, 401)
+        self.login(self.client, 'deptadmin', 'User-password-123')
+        self.assertEqual(self.client.patch('/api/admin/works/photography', json={'status': 'rejected', 'reason': '不允许'}).status_code, 403)
+        owner.patch('/api/admin/users/' + member['id'] + '/role', json={'role': 'user'})
+        with self.app.state.db() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM admin_departments').fetchone()[0], 0)
+        owner.close(); visitor.close()
+
     def test_edit_resubmit_order_ownership_and_atomic_failure(self):
         author = self.register(self.client, 'creator1')
         owner, visitor = self.new_client(), self.new_client()

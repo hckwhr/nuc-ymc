@@ -6,8 +6,9 @@ import type { PhotoCategory } from "../data/photographyCats";
 
 export function useDepartmentGallery(category: Department, original: PhotoCategory[]) {
   const { departments } = useCategories();
-  return [...new Set([...departments[category].branches, ...original.map(item => item.name)])].map(name => ({
-    name, images: original.find(item => item.name === name)?.images || [],
+  const aliases = departments[category].aliases || {};
+  return departments[category].branches.map(name => ({
+    name, images: original.filter(item => (aliases[item.name] || item.name) === name).flatMap(item => item.images),
   }));
 }
 

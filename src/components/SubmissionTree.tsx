@@ -11,14 +11,14 @@ const appearance = {
   douyin: { color: "#FB6F92", tint: "#FFF0F5", image: douyinDaily[0], subtitle: "记录校园的每一帧" },
 };
 
-export function DepartmentFilters({ category, branch, onChange }: {
-  category: string; branch: string; onChange: (category: string, branch: string) => void;
+export function DepartmentFilters({ category, branch, onChange, onlyDepartment }: {
+  category: string; branch: string; onChange: (category: string, branch: string) => void; onlyDepartment?: string | null;
 }) {
   const { departments } = useCategories();
   return <div className="department-filters">
     <label>投稿部门<select value={category} onChange={e => onChange(e.target.value, "")}>
-      <option value="">全部部门</option>
-      {Object.entries(departments).map(([key, value]) => <option key={key} value={key}>{value.name}</option>)}
+      {!onlyDepartment && <option value="">全部部门</option>}
+      {Object.entries(departments).filter(([key]) => !onlyDepartment || key === onlyDepartment).map(([key, value]) => <option key={key} value={key}>{value.name}</option>)}
     </select></label>
     <label>作品分支<select value={branch} disabled={!category} onChange={e => onChange(category, e.target.value)}>
       <option value="">全部分支</option>

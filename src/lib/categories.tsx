@@ -3,7 +3,7 @@ import defaults from "../../server/categories.json";
 import { api } from "./community";
 
 export type Department = keyof typeof defaults;
-export type Categories = Record<Department, { name: string; branches: string[]; counts?: Record<string, number> }>;
+export type Categories = Record<Department, { name: string; branches: string[]; counts?: Record<string, number>; aliases?: Record<string, string> }>;
 export const departmentNames = defaults;
 const Context = createContext<{ departments: Categories; error: string; refresh: () => Promise<void> } | null>(null);
 

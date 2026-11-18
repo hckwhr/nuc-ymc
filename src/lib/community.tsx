@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 const environment = (import.meta as unknown as { env: Record<string, string> }).env;
 export const API = (environment.VITE_API_URL || (environment.MODE === "development" ? "" : "https://api.nuc-ymc.com")).replace(/\/$/, "");
 export const CONSENT = "2026-11-18";
-export type User = { id: string; username: string; nickname: string; role: "owner" | "admin" | "user"; disabled: number; created_at: number; last_login: number | null; must_change_password: number };
+export type User = { id: string; username: string; nickname: string; role: "owner" | "admin" | "user"; department?: string | null; disabled: number; created_at: number; last_login: number | null; must_change_password: number };
 export type Work = { id: string; user_id?: string; title: string; description: string; category: string; branch: string; status: string; reason?: string; nickname: string; username?: string; images: string[]; created_at: number; updated_at: number; featured?: boolean; published_at?: number | null };
 export type Page<T> = { items: T[]; total: number; page: number };
 export const roleName = { owner: "总管理员", admin: "管理员", user: "创作者" };
