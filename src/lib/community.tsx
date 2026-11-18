@@ -11,7 +11,7 @@ export const statusName: Record<string, string> = { pending: "待审核", approv
 export const dateText = (value: number | null) => value ? new Date(value * 1000).toLocaleString("zh-CN") : "暂无";
 let csrfToken = "";
 
-export function uploadWithProgress(path: string, data: FormData, progress: (percent: number) => void): Promise<void> {
+export function uploadWithProgress(path: string, data: FormData, progress: (percent: number) => void): Promise<{ id: string; status: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API}/api${path}`); xhr.withCredentials = true; xhr.timeout = 180000;
@@ -22,7 +22,7 @@ export function uploadWithProgress(path: string, data: FormData, progress: (perc
     xhr.onload = () => {
       try {
         const result = JSON.parse(xhr.responseText);
-        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        if (xhr.status >= 200 && xhr.status < 300) resolve(result);
         else reject(new Error(typeof result.detail === "string" ? result.detail : "提交失败，请检查填写内容后重试"));
       } catch { reject(new Error("服务暂时无法处理，填写内容已保留，请稍后重试")); }
     };

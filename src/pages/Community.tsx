@@ -35,14 +35,16 @@ export function Pagination({ page, total, change }: { page: number; total: numbe
   return <div className="pagination"><span>共 {total} 条 · 第 {page} 页</span><button disabled={page === 1} onClick={() => change(page - 1)}>上一页</button><button disabled={page * 24 >= total} onClick={() => change(page + 1)}>下一页</button></div>;
 }
 
-export function WorkCard({ work, children }: { work: Work; children?: ReactNode }) {
+export function WorkCard({ work, children, personal = false, highlighted = false }: { work: Work; children?: ReactNode; personal?: boolean; highlighted?: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  return <article className="work-card">
+  return <article id={`work-${work.id}`} className={`work-card ${highlighted ? "work-highlighted" : ""}`}>
+    {highlighted && <p className="work-new-label">本次投稿 · 已收到</p>}
     {work.images.length > 0 && <button className="work-cover" onClick={() => setExpanded(true)} aria-label={`查看 ${work.title}`}><img src={`${API}/api/images/${work.images[0]}?size=thumb`} alt={work.title} loading="lazy" /></button>}
     <div className="work-content"><div className="work-meta"><span>{departments[work.category as Department]?.name || work.category} · {work.branch || "其他"}</span><span className={`status ${work.status}`}>{statusName[work.status]}</span></div>
       <h2>{work.title}</h2><p className="muted">{work.creator_id ? <Link to={`/creators/${work.creator_id}`}>{work.nickname} ↗</Link> : work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
-      {work.reason && <p className="notice">处理说明 · {work.reason}</p>}{children}</div>
-    {work.status === "approved" && <div className="work-public-links"><span>{work.featured ? "编辑精选 · 已公开展示" : "已公开展示"}</span><Link to={`/works/${work.id}`}>作品详情 / 分享 ↗</Link><Link to="/#works">首页作品墙 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
+      {personal && <p className="work-status-guide">{work.status === "pending" ? "正在等待管理员审核，暂未公开。审核结果会显示在这里和站内通知中。" : work.status === "rejected" ? "请根据下方反馈修改，再重新提交审核。" : work.status === "approved" ? "已公开，可从下方查看展示位置或分享作品。首页仅展示部分最新作品与精选。" : "作品已停止展示，原链接和图片无法访问。"}</p>}
+      {work.reason && <p className="notice">{work.status === "rejected" ? "修改建议" : "处理说明"} · {work.reason}</p>}{children}</div>
+    {work.status === "approved" && <div className="work-public-links"><span>{work.featured ? "编辑精选 · 已公开展示" : "已公开展示"}</span><Link to={`/works/${work.id}`}>作品详情 / 分享 ↗</Link><Link to={`/community?category=${encodeURIComponent(work.category)}&branch=${encodeURIComponent(work.branch || "其他")}`}>作品社区 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
     {expanded && <Lightbox items={work.images.map(id => ({ type: "image", src: `${API}/api/images/${id}`, caption: work.title }))} index={0} onClose={() => setExpanded(false)} />}
   </article>;
 }
@@ -115,6 +117,7 @@ export function Account() {
   const { user, loading, error: serviceError, refresh } = useAuth();
   const [works, setWorks] = useState<Page<Work>>({ items: [], total: 0, page: 1 }), [page, setPage] = useState(1), [version, setVersion] = useState(0);
   const [error, setError] = useState(""), [message, setMessage] = useState(""), [busy, setBusy] = useState(false), [nickname, setNickname] = useState("");
+  const [submittedId, setSubmittedId] = useState("");
   const [query, setQuery] = useState(""), [status, setStatus] = useState(""), [fetching, setFetching] = useState(true), [workError, setWorkError] = useState("");
   useEffect(() => { setNickname(user?.nickname || ""); }, [user?.nickname]);
   useEffect(() => {
@@ -124,6 +127,12 @@ export function Account() {
     api<Page<Work>>(`/my/works?${filters}`).then(data => { if (active) setWorks(data); }).catch(e => { if (active) setWorkError(e.message); }).finally(() => { if (active) setFetching(false); });
     return () => { active = false; };
   }, [user?.id, user?.must_change_password, page, version, query, status]);
+  useEffect(() => {
+    if (!user) return;
+    const update = () => { if (!document.hidden) setVersion(v => v + 1); };
+    window.addEventListener("focus", update);
+    return () => window.removeEventListener("focus", update);
+  }, [user?.id]);
   async function remove(work: Work) {
     if (!window.confirm(`确定删除《${work.title}》？删除后作品将无法访问。`)) return;
     setBusy(true); setError("");
@@ -133,12 +142,14 @@ export function Account() {
     <div className="page-heading"><div><p className="eyebrow">{roleName[user.role]}</p><h1>我的创作空间</h1><p className="account-identity">登录用户名 <strong>@{user.username}</strong><span>公开昵称 · {user.nickname}</span></p></div>{user.role !== "user" && <Link className="button" to="/admin">进入管理后台</Link>}</div>
     <details className="account-settings"><summary>个人资料与账号安全</summary><form className="profile-form" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await api("/profile", { method: "PATCH", body: JSON.stringify({ nickname }) }); await refresh(); setMessage("昵称已更新"); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label>公开昵称<input value={nickname} required maxLength={32} onChange={e => setNickname(e.target.value)} /></label><button disabled={busy}>保存昵称</button></form>
     <PasswordForm /></details>
-    <SubmissionTree key={user.id} userId={user.id} onSubmitted={() => { setVersion(v => v + 1); setPage(1); setQuery(""); setStatus(""); }} />
+    <SubmissionTree key={user.id} userId={user.id} onSubmitted={id => { setSubmittedId(id); setVersion(v => v + 1); setPage(1); setQuery(""); setStatus(""); }} />
     <section className="upload-panel"><h2>学习资料也可以分享</h2><p className="muted">按课程上传 PDF、Word 或压缩包，审核后展示在内部学习共享区。</p><Link className="button primary" to="/study/submit">分享资料 / 我的资料</Link></section>
     {error && <p className="notice error" role="alert">{error}</p>}{message && <p className="notice" role="status">{message}</p>}
-    <h2 className="section-title">我的作品</h2><WorkSearch value={query} onSearch={q => { setQuery(q); setPage(1); }} />
-    <div className="filter-row"><label>作品状态<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">全部状态</option>{Object.entries(statusName).map(([key, name]) => <option key={key} value={key}>{name}</option>)}</select></label><button disabled={fetching} onClick={() => setVersion(v => v + 1)}>刷新我的作品</button></div>
-    {fetching ? <p role="status">正在加载我的作品…</p> : workError ? <div role="alert" className="notice error">{workError} <button onClick={() => setVersion(v => v + 1)}>重试加载我的作品</button></div> : <><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work}>{work.status !== "deleted" && <div className="action-row"><Link className="button" to={`/account/works/${work.id}/edit`}>{work.status === "rejected" ? "修改并重新投稿" : "编辑作品"}</Link><button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button></div>}</WorkCard>)}</div>{works.items.length === 0 && <div className="empty-state"><p>{query || status ? "没有符合条件的投稿。" : "你的投稿和审核结果会显示在这里。"}</p>{(query || status || page > 1) && <button onClick={() => { setQuery(""); setStatus(""); setPage(1); }}>查看全部投稿</button>}</div>}<Pagination page={page} total={works.total} change={setPage} /></>}
+    <section id="my-works" className="my-works-section" aria-labelledby="my-works-heading"><h2 id="my-works-heading" className="section-title">我的作品</h2><p className="muted">提交后在这里跟踪审核。返回此页面时自动刷新，也可以手动刷新。</p>
+    <div className="work-status-tabs" role="group" aria-label="按审核状态查看">{[["", "全部投稿", "查看所有作品"], ["pending", "待审核", "等待管理员处理"], ["approved", "已公开", "查看展示与分享"], ["rejected", "需修改", "查看反馈后再提交"], ["deleted", "已删除", "查看历史记录"]].map(([key, label, hint]) => <button key={key} type="button" aria-pressed={status === key} onClick={() => { setStatus(key); setPage(1); }}><strong>{label}</strong><small>{hint}</small></button>)}</div><WorkSearch value={query} onSearch={q => { setQuery(q); setPage(1); }} />
+    <div className="action-row"><button disabled={fetching} onClick={() => setVersion(v => v + 1)}>刷新我的作品</button><Link className="button" to="/notifications">查看审核通知 ↗</Link></div>
+
+    {fetching ? <p role="status">正在加载我的作品…</p> : workError ? <div role="alert" className="notice error">{workError} <button onClick={() => setVersion(v => v + 1)}>重试加载我的作品</button></div> : <><div className="works-grid">{works.items.map(work => <WorkCard key={work.id} work={work} personal highlighted={work.id === submittedId}>{work.status !== "deleted" && <div className="action-row"><Link className="button" to={`/account/works/${work.id}/edit`}>{work.status === "rejected" ? "修改并重新投稿" : "编辑作品"}</Link><button className="danger" disabled={busy} onClick={() => void remove(work)}>删除作品</button></div>}</WorkCard>)}</div>{works.items.length === 0 && <div className="empty-state"><p>{query || status ? "没有符合条件的投稿。" : "你的投稿和审核结果会显示在这里。"}</p>{(query || status || page > 1) && <button onClick={() => { setQuery(""); setStatus(""); setPage(1); }}>查看全部投稿</button>}</div>}<Pagination page={page} total={works.total} change={setPage} /></>}</section>
   </>}</CommunityLayout>;
 }
 
