@@ -249,6 +249,17 @@
 .work-status-guide { padding-top: 12px; border-top: 1px solid #ece9e1; color: #6f6f6f; }
 .work-highlighted { border-color: #ff7a59; }
 .work-new-label { padding: 12px 20px; background: #fff0ea; font-size: 13px; color: #943b26; }
+.admin-tasks, .recent-members { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 24px 0; }
+.community-shell .admin-tasks button, .community-shell .recent-members button { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left; padding: 22px; background: #fff; border-radius: 18px; overflow-wrap: anywhere; min-width: 0; }
+.community-shell .admin-tasks button { background: #fff5ef; border-color: #f0d8cc; }
+.admin-tasks strong { font-size: 36px; font-weight: 500; }
+.admin-tasks small, .recent-members small { color: #6f6f6f; }
+.member-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin: 24px 0; }
+.member-facts dt { color: #6f6f6f; font-size: 13px; margin-bottom: 8px; }
+.member-detail .page-heading { margin-bottom: 20px; }
+.member-detail .action-row button[aria-pressed=true] { border-color: #ff7a59; background: #fff0ea; }
+.member-permissions { border-top: 1px solid #ece9e1; padding-top: 20px; margin-top: 20px; }
+.member-detail .muted { margin-top: 12px; font-size: 13px; }
 @media (max-width: 600px) { .submission-steps { gap: 5px; } .submission-steps li { flex-direction: column; font-size: 12px; } .submission-footer .action-row { width: 100%; } }
 @keyframes branch-open { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 600px) {

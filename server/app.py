@@ -720,6 +720,17 @@ def create_app(settings: Settings | None = None):
                                       (*params, (page - 1) * 24)).fetchall()
         return {"items": [{**public_user(row), "study_count": row['study_count'], "work_count": row["work_count"], "login_count": row["login_count"]} for row in rows], "total": count, "page": page}
 
+    @app.get("/api/admin/users/{user_id}")
+    def member_detail(user_id: str, user=Depends(full_administrator)):
+        with db() as connection:
+            row = connection.execute("SELECT u.*, (SELECT COUNT(*) FROM works WHERE user_id=u.id) AS work_count, "
+                                     "(SELECT COUNT(*) FROM study_documents WHERE user_id=u.id) AS study_count, "
+                                     "(SELECT COUNT(*) FROM login_events WHERE user_id=u.id AND success=1) AS login_count "
+                                     "FROM users u WHERE id=?", (user_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "用户不存在")
+        return {**public_user(row), **{key: row[key] for key in ('work_count', 'study_count', 'login_count')}}
+
     @app.patch("/api/admin/users/{user_id}/role")
     def change_role(user_id: str, body: RoleRequest, user=Depends(owner)):
         if body.department is not None and body.department not in CATEGORIES:
