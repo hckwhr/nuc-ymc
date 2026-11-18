@@ -3,15 +3,20 @@ import type { PhotoCategory } from "../data/photographyCats";
 import { Reveal } from "./Reveal";
 import { Lightbox, type LightItem } from "./Lightbox";
 import { ossThumb } from "./img";
+import { PublishedWorks } from "../components/PublishedWorks";
+import { useCategories, type Department } from "./categories";
 
 /** 分类图库：每个分类一段，从上到下堆叠，点击放大。 */
 export function CategoryGallery({
   categories,
   accent,
+  department,
 }: {
   categories: PhotoCategory[];
   accent: string;
+  department?: Department;
 }) {
+  const { departments } = useCategories();
   const [light, setLight] = useState<{ items: LightItem[]; index: number } | null>(null);
 
   return (
@@ -20,14 +25,15 @@ export function CategoryGallery({
         <div key={cat.name || "all"} id={cat.name ? `cat-${cat.name}` : undefined} className="mb-16 scroll-mt-24 last:mb-0">
           {cat.name && (
             <Reveal>
-              <div className="mb-6 flex items-center gap-4">
+              <div className="mb-6 flex flex-wrap items-center gap-3">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
-                <h3 className="font-display text-2xl text-ink sm:text-3xl">{cat.name}</h3>
+                <h3 className="font-display break-all text-2xl text-ink sm:text-3xl">{cat.name}</h3>
                 <span className="h-px flex-1 bg-line" />
-                <span className="shrink-0 text-sm text-soft">{cat.images.length} 张</span>
+                <span className="shrink-0 text-sm text-soft">{cat.images.length} 张馆藏{department ? ` · ${departments[department].counts?.[cat.name] || 0} 件投稿` : ""}</span>
               </div>
             </Reveal>
           )}
+          {department && <div className="mb-6"><PublishedWorks category={department} branch={cat.name} /></div>}
           <div className="columns-2 gap-4 md:columns-3 lg:columns-4 [&>*]:mb-4">
             {cat.images.map((src, i) => (
               <button

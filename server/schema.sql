@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS sessions (
  expires INTEGER NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS limits (scope TEXT PRIMARY KEY, hits INTEGER NOT NULL, resets INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS branches (
+ category TEXT NOT NULL CHECK(category IN ('photography','design','douyin')),
+ name TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(category, name)
+);
 CREATE TABLE IF NOT EXISTS login_events (
  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT REFERENCES users(id), username TEXT NOT NULL,
  success INTEGER NOT NULL, reason TEXT NOT NULL, ip_hash TEXT NOT NULL, device TEXT NOT NULL, created_at INTEGER NOT NULL

@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import categories from "../../server/categories.json";
+import { useCategories, type Department } from "../lib/categories";
 import { api } from "../lib/community";
 import { photographyImages, designImages, douyinDaily } from "../data/media";
 
-export const departments = categories;
-export type Department = keyof typeof departments;
 const appearance = {
   photography: { color: "#38BDF8", tint: "#EAF7FE", image: photographyImages[0], subtitle: "定格光影，收藏瞬间" },
   design: { color: "#FF7A59", tint: "#FFF0EA", image: designImages[0], subtitle: "让想象拥有形状" },
@@ -14,6 +12,7 @@ const appearance = {
 export function DepartmentFilters({ category, branch, onChange }: {
   category: string; branch: string; onChange: (category: string, branch: string) => void;
 }) {
+  const { departments } = useCategories();
   return <div className="department-filters">
     <label>投稿部门<select value={category} onChange={e => onChange(e.target.value, "")}>
       <option value="">全部部门</option>
@@ -27,6 +26,7 @@ export function DepartmentFilters({ category, branch, onChange }: {
 }
 
 export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
+  const { departments, error: categoryError } = useCategories();
   const [department, setDepartment] = useState<Department | null>(null);
   const [branch, setBranch] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -68,6 +68,7 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
   const theme = department ? appearance[department] : null;
   return <section className="submission-tree" aria-labelledby="submission-heading" style={{ "--branch-color": theme?.color || "#1A1A1A", "--branch-tint": theme?.tint || "#FFFFFF" } as CSSProperties}>
     <div className="tree-intro"><span className="tree-root-dot" /><h2 id="submission-heading">你的作品，从这里出发</h2><p>选一个部门，为灵感找到归属。</p></div>
+    {categoryError && <p className="notice" role="status">{categoryError}</p>}
     <div className="department-nodes" aria-label="选择投稿部门">
       {(Object.keys(departments) as Department[]).map(key => <div className={`department-path ${department === key ? "selected" : ""}`} key={key} style={{ "--node-color": appearance[key].color } as CSSProperties}>
         <button type="button" className="department-node" aria-pressed={department === key} aria-controls="submission-branches" disabled={busy} onClick={() => chooseDepartment(key)}>
@@ -93,7 +94,7 @@ export function SubmissionTree({ onSubmitted }: { onSubmitted: () => void }) {
         {department === "douyin" && <p className="upload-format-note">当前支持封面、分镜和图文素材。视频文件上传暂未开放。</p>}
         <div className="selected-previews">{previews.map((src, index) => <figure key={src}><img src={src} alt={`待投稿图片 ${index + 1}`} /><figcaption>{files[index]?.name}</figcaption></figure>)}</div>
         <label className="checkbox-label"><input type="checkbox" name="rights" value="true" required /><span>作品为本人原创或已获授权，同意投稿规则。</span></label>
-        <div className="submission-footer"><span>提交后由管理员审核，结果会显示在我的作品中。</span><button className="primary" disabled={busy}>{busy ? "作品正在提交…" : `提交到${branch}`}<span aria-hidden="true">↗</span></button></div>
+        <div className="submission-footer"><span>审核通过后，将同步展示在首页作品墙、所属部门和作品社区。</span><button className="primary" disabled={busy}>{busy ? "作品正在提交…" : `提交到${branch}`}<span aria-hidden="true">↗</span></button></div>
       </fieldset>
     </form>
     {error && <p className="notice error" role="alert">{error}</p>}

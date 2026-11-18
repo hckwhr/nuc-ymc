@@ -21,7 +21,7 @@ class SecurityTests(unittest.TestCase):
         self.client = self.new_client()
         with self.app.state.db(write=True) as db:
             db.execute("INSERT INTO users(id,username,password_hash,nickname,role,created_at,consent_version) VALUES(?,?,?,?,?,1,?)",
-                       ("owner-id", "hck_admin", hash_password("Owner-password-123"), "Owner", "owner", CONSENT_VERSION))
+                       ("owner-id", "hck", hash_password("Owner-password-123"), "Owner", "owner", CONSENT_VERSION))
 
     def tearDown(self):
         self.client.close()
@@ -44,7 +44,7 @@ class SecurityTests(unittest.TestCase):
 
     def test_roles_private_upload_moderation_and_revocation(self):
         owner = self.new_client()
-        self.login(owner, "hck_admin", "Owner-password-123")
+        self.login(owner, "hck", "Owner-password-123")
         user = self.register(self.client, "creator1")
         self.assertEqual(user["role"], "user")
         self.assertEqual(self.client.get("/api/admin/users").status_code, 403)
@@ -77,7 +77,7 @@ class SecurityTests(unittest.TestCase):
         owner.close(); outsider.close()
 
     def test_password_csrf_owner_reservation_and_rate_limits(self):
-        reserved = self.client.post('/api/auth/register', json={"username": "hck_admin", "password": "User-password-123", "consent": CONSENT_VERSION})
+        reserved = self.client.post('/api/auth/register', json={"username": "hck", "password": "User-password-123", "consent": CONSENT_VERSION})
         self.assertEqual(reserved.status_code, 409)
         self.register(self.client, 'creator1')
         self.assertEqual(self.client.patch('/api/profile', json={"nickname": "x"}, headers={"Origin": "https://evil.test"}).status_code, 403)
@@ -95,7 +95,7 @@ class SecurityTests(unittest.TestCase):
     def test_initial_password_restricts_owner(self):
         with self.app.state.db(write=True) as db:
             db.execute("UPDATE users SET must_change_password=1 WHERE id='owner-id'")
-        self.login(self.client, 'hck_admin', 'Owner-password-123')
+        self.login(self.client, 'hck', 'Owner-password-123')
         self.assertEqual(self.client.get('/api/admin/users').status_code, 403)
         self.assertEqual(self.client.post('/api/auth/password', json={"current_password": "Owner-password-123", "password": "Owner-new-password-456"}).status_code, 200)
         self.assertEqual(self.client.get('/api/admin/users').status_code, 200)
@@ -110,7 +110,7 @@ class SecurityTests(unittest.TestCase):
         work = self.client.get('/api/my/works').json()['items'][0]
         self.assertEqual(work['branch'], '创意短片')
         owner = self.new_client()
-        self.login(owner, 'hck_admin', 'Owner-password-123')
+        self.login(owner, 'hck', 'Owner-password-123')
         self.assertEqual(owner.get('/api/admin/works?category=douyin&branch=创意短片').json()['total'], 1)
         self.assertEqual(owner.get('/api/admin/works?category=design').json()['total'], 0)
         owner.patch('/api/admin/works/' + work['id'], json={'status': 'approved'})
@@ -140,6 +140,50 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT work_id FROM images').fetchone()[0], 'existing-work')
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
+
+    def test_dynamic_branches_and_public_visibility(self):
+        visitor = self.new_client()
+        owner = self.new_client()
+        self.login(owner, 'hck', 'Owner-password-123')
+        author = self.register(self.client, 'creator1')
+        payload = {'category': 'photography', 'name': '毕业季'}
+        self.assertEqual(visitor.post('/api/admin/branches', json=payload).status_code, 401)
+        self.assertEqual(self.client.post('/api/admin/branches', json=payload).status_code, 403)
+        csrf = owner.headers.pop('X-CSRF-Token')
+        self.assertEqual(owner.post('/api/admin/branches', json=payload).status_code, 403)
+        owner.headers['X-CSRF-Token'] = csrf
+        self.assertEqual(owner.post('/api/admin/branches', json=payload).status_code, 201)
+        self.assertEqual(owner.post('/api/admin/branches', json=payload).status_code, 409)
+        self.assertEqual(owner.post('/api/admin/branches', json={**payload, 'name': '  '}).status_code, 422)
+        self.assertEqual(owner.post('/api/admin/branches', json={**payload, 'category': 'invalid'}).status_code, 422)
+        self.assertIn('毕业季', visitor.get('/api/categories').json()['photography']['branches'])
+        picture = io.BytesIO()
+        Image.new('RGB', (20, 20), 'blue').save(picture, 'PNG')
+        response = self.client.post('/api/works', data={'category': 'photography', 'branch': '毕业季', 'title': '毕业合影', 'rights': 'true'}, files={'files': ('photo.png', picture.getvalue(), 'image/png')})
+        self.assertEqual(response.status_code, 201, response.text)
+        work_id = response.json()['id']
+        feed = '/api/works?category=photography&branch=毕业季'
+        self.assertEqual(visitor.get(feed).json()['total'], 0)
+        for status, count in [('approved', 1), ('rejected', 0), ('approved', 1)]:
+            self.assertEqual(owner.patch('/api/admin/works/' + work_id, json={'status': status, 'reason': '审核测试'}).status_code, 200)
+            self.assertEqual(visitor.get(feed).json()['total'], count)
+            self.assertEqual(visitor.get('/api/works').json()['total'], count)
+            self.assertEqual(visitor.get('/api/categories').json()['photography']['counts'].get('毕业季', 0), count)
+        self.assertNotIn('username', visitor.get(feed).json()['items'][0])
+        owner.patch('/api/admin/users/' + author['id'] + '/disabled', json={'disabled': True})
+        self.assertEqual(visitor.get(feed).json()['total'], 0)
+        owner.patch('/api/admin/users/' + author['id'] + '/disabled', json={'disabled': False})
+        owner.patch('/api/admin/works/' + work_id, json={'status': 'deleted', 'reason': '清理'})
+        self.assertEqual(visitor.get(feed).json()['total'], 0)
+        owner.patch('/api/admin/users/' + author['id'] + '/role', json={'role': 'admin'})
+        self.login(self.client, 'creator1', 'User-password-123')
+        self.assertEqual(self.client.post('/api/admin/branches', json={'category': 'design', 'name': '校园文创'}).status_code, 201)
+        # A fresh app instance reads persisted custom branches rather than resetting to defaults.
+        restarted = create_app(Settings(environment='test', data_dir=Path(self.temp.name), secret='x' * 40, storage='local', origins=('https://site.test',)))
+        with TestClient(restarted) as client:
+            self.assertIn('校园文创', client.get('/api/categories').json()['design']['branches'])
+        visitor.close()
+        owner.close()
 
 
 if __name__ == '__main__':

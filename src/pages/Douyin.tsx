@@ -5,6 +5,7 @@ import { Footer } from "../components/Footer";
 import { IconPlay } from "../lib/icons";
 import { douyinVideos, douyinDaily } from "../data/media";
 import { CategoryGallery } from "../lib/CategoryGallery";
+import { useDepartmentGallery } from "../components/PublishedWorks";
 
 // 字体：参考用 Fontshare「General Sans」。其 CDN(BunnyCDN)在国内不可达，
 // 故以自托管的 Inter 作等价替身(几何 grotesque，Hero 大字观感一致)。
@@ -159,9 +160,17 @@ function VideoCard({ src }: { src: string }) {
 }
 
 export default function Douyin() {
+  const categories = useDepartmentGallery("douyin", []);
   return (
     <div className="min-h-screen bg-background" style={FONT}>
       <Hero />
+
+      <section id="gallery" className="mx-auto max-w-7xl px-6 py-20">
+        <h2 className="font-display text-4xl text-ink">一起记录校园</h2>
+        <p className="mt-5 text-soft">封面、分镜与图文素材，来自每一位创作者。审核通过的投稿按分支同步展示。</p>
+        <div className="my-8 flex flex-wrap gap-2">{categories.map(c => <a key={c.name} href={`#cat-${encodeURIComponent(c.name)}`} className="rounded-full border border-line px-4 py-2 text-sm">{c.name}</a>)}</div>
+        <CategoryGallery categories={categories} accent={ACCENT} department="douyin" />
+      </section>
 
       {/* 精选作品（浅色，和主站一致） */}
       <section id="works" className="mx-auto max-w-7xl px-6 py-20 sm:py-28">

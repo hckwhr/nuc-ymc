@@ -6,6 +6,7 @@ import { SectionHead } from "./SectionHead";
 import { Lightbox, type LightItem } from "../lib/Lightbox";
 import { IconArrow } from "../lib/icons";
 import { ossThumb } from "../lib/img";
+import { PublishedWorks } from "./PublishedWorks";
 
 // 主站精选：摄影 + 设计交叉混合
 const CURATED: LightItem[] = (() => {
@@ -28,9 +29,11 @@ export function Works() {
       <SectionHead
         kicker="Showcase"
         title={<>作品<em className="not-italic text-sky">墙</em></>}
-        sub="这里是我们最能打的瞬间——摄影与设计精选。"
+        sub="摄影、设计与抖音部的共同创作，审核通过的新作品会在这里与你见面。"
       />
 
+      <div className="mb-14"><PublishedWorks /></div>
+      <h3 className="mb-6 text-xl text-ink">馆藏精选</h3>
       <Reveal>
         <div className="columns-2 gap-4 md:columns-3 lg:columns-4 [&>*]:mb-4">
           {CURATED.map((w, i) => (
@@ -54,6 +57,7 @@ export function Works() {
       </Reveal>
 
       <div className="mt-12 flex flex-wrap justify-center gap-4">
+        <Link to="/douyin#gallery" className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-medium text-ink">抖音部全部作品 <IconArrow width={16} height={16} /></Link>
         <Link to="/community" className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-medium text-white">作品社区 / 上传作品 <IconArrow width={16} height={16} /></Link>
         <Link
           to="/photography"

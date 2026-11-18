@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { designCategories } from "../data/designCats";
 import { site } from "../data/site";
 import { CategoryGallery } from "../lib/CategoryGallery";
+import { useDepartmentGallery } from "../components/PublishedWorks";
+import { useCategories } from "../lib/categories";
 import { Reveal } from "../lib/Reveal";
 import { Footer } from "../components/Footer";
 import { ossThumb } from "../lib/img";
@@ -218,6 +220,9 @@ function LithosHero() {
 }
 
 export default function Design() {
+  const categories = useDepartmentGallery("design", designCategories);
+  const { departments } = useCategories();
+  const published = Object.values(departments.design.counts || {}).reduce((sum, count) => sum + count, 0);
   const total = designCategories.reduce((n, c) => n + c.images.length, 0);
 
   return (
@@ -236,14 +241,14 @@ export default function Design() {
           {STORY}
         </Reveal>
         <Reveal as="p" delay={190} className="mt-3 text-sm text-soft/70">
-          按类别分组 · 共 {total} 张 · 点击查看大图
+          按类别分组 · 馆藏 {total} 张 · 公开投稿 {published} 件 · 点击查看大图
         </Reveal>
         <Reveal delay={230}>
           <div className="mt-6 flex flex-wrap gap-2">
-            {designCategories.map((c) => (
+            {categories.map((c) => (
               <a
                 key={c.name}
-                href={`#cat-${c.name}`}
+                href={`#cat-${encodeURIComponent(c.name)}`}
                 className="rounded-full border px-3.5 py-1.5 text-sm text-ink transition-colors"
                 style={{ borderColor: ACCENT + "55", background: ACCENT + "10" }}
               >
@@ -255,7 +260,7 @@ export default function Design() {
       </section>
 
       <section id="gallery" className="mx-auto max-w-7xl px-6 pb-24">
-        <CategoryGallery categories={designCategories} accent={ACCENT} />
+        <CategoryGallery categories={categories} accent={ACCENT} department="design" />
       </section>
 
       <Footer />

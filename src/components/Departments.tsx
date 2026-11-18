@@ -3,8 +3,10 @@ import { site } from "../data/site";
 import { Reveal } from "../lib/Reveal";
 import { SectionHead } from "./SectionHead";
 import { DeptIcon, IconArrow } from "../lib/icons";
+import { useCategories, type Department } from "../lib/categories";
 
 export function Departments() {
+  const { departments } = useCategories();
   return (
     <section id="departments" className="mx-auto max-w-7xl px-6 py-24 sm:py-28">
       <SectionHead
@@ -15,6 +17,7 @@ export function Departments() {
 
       <div className="flex flex-wrap justify-center gap-5">
         {site.departments.map((d, i) => {
+          const catalog = departments[d.key as Department];
           const inner = (
             <>
               <div
@@ -28,6 +31,7 @@ export function Departments() {
                 <span className="text-xs uppercase tracking-widest text-soft/70">{d.nameEn}</span>
               </div>
               <p className="text-sm leading-relaxed text-soft">{d.desc}</p>
+              {catalog && <p className="mt-3 text-xs text-soft">{catalog.branches.length} 个作品分支 · {Object.values(catalog.counts || {}).reduce((sum, count) => sum + count, 0)} 件公开投稿</p>}
               <div className="mt-5">
                 {d.link ? (
                   <span

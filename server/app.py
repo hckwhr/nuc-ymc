@@ -24,7 +24,7 @@ CONSENT_VERSION = "2026-11-18"
 SESSION_SECONDS = 12 * 3600
 CATEGORIES = json.loads(Path(__file__).with_name("categories.json").read_text(encoding="utf-8"))
 class LoginRequest(BaseModel):
-    username: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_]{3,31}$")
+    username: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_]{2,31}$")
     password: str = Field(min_length=1, max_length=128)
 
 
@@ -53,6 +53,11 @@ class RoleRequest(BaseModel):
 
 class DisableRequest(BaseModel):
     disabled: bool
+
+
+class BranchRequest(BaseModel):
+    category: str
+    name: str = Field(min_length=1, max_length=30)
 
 
 def create_app(settings: Settings | None = None):
@@ -84,6 +89,10 @@ def create_app(settings: Settings | None = None):
         if owner and owner["username"] != settings.owner_username:
             raise ValueError("OWNER_USERNAME differs from the existing owner; use a reviewed account migration")
     migrate_departments(database)
+    with db(write=True) as connection:
+        for category, definition in CATEGORIES.items():
+            connection.executemany("INSERT OR IGNORE INTO branches VALUES(?,?,0)",
+                                   [(category, name) for name in definition["branches"]])
 
     app = FastAPI(title="青年媒体中心", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.db = db
@@ -171,6 +180,35 @@ def create_app(settings: Settings | None = None):
         with db() as connection:
             connection.execute("SELECT 1")
         return {"status": "ok"}
+
+    def valid_branch(category, branch):
+        with db() as connection:
+            return connection.execute("SELECT 1 FROM branches WHERE category=? AND name=?", (category, branch)).fetchone() is not None
+
+    @app.get("/api/categories")
+    def categories():
+        with db() as connection:
+            result = {key: {"name": value["name"], "branches": [], "counts": {}} for key, value in CATEGORIES.items()}
+            for row in connection.execute("SELECT category,name FROM branches ORDER BY created_at,rowid"):
+                result[row["category"]]["branches"].append(row["name"])
+            for row in connection.execute("SELECT w.category,w.branch,COUNT(*) AS total FROM works w JOIN users u ON u.id=w.user_id "
+                                          "WHERE w.status='approved' AND u.disabled=0 GROUP BY w.category,w.branch"):
+                result[row["category"]]["counts"][row["branch"]] = row["total"]
+        return result
+
+    @app.post("/api/admin/branches", status_code=201)
+    def create_branch(body: BranchRequest, user=Depends(administrator)):
+        name = body.name.strip()
+        if body.category not in CATEGORIES or not name or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            raise HTTPException(422, "请选择部门并填写 1 至 30 个可显示字符的分支名称")
+        with db(write=True) as connection:
+            if connection.execute("SELECT 1 FROM branches WHERE category=? AND name=?", (body.category, name)).fetchone():
+                raise HTTPException(409, "该部门已有同名分支")
+            if connection.execute("SELECT COUNT(*) FROM branches WHERE category=?", (body.category,)).fetchone()[0] >= 50:
+                raise HTTPException(409, "每个部门最多 50 个分支")
+            connection.execute("INSERT INTO branches VALUES(?,?,?)", (body.category, name, now()))
+            audit(connection, user["id"], "create_branch", body.category, name)
+        return {"category": body.category, "name": name}
 
     def issue_session(connection, user, request, response):
         token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
@@ -291,7 +329,7 @@ def create_app(settings: Settings | None = None):
     def works(page: int = 1, category: str = "", branch: str = ""):
         if page < 1 or page > 100000 or (category and category not in CATEGORIES):
             raise HTTPException(422, "无效筛选条件")
-        if branch and (not category or branch not in CATEGORIES[category]["branches"]):
+        if branch and not valid_branch(category, branch):
             raise HTTPException(422, "请选择该部门下的有效分支")
         where, params = "w.status='approved' AND u.disabled=0", ()
         if category:
@@ -315,7 +353,7 @@ def create_app(settings: Settings | None = None):
                      user=Depends(current_user)):
         if category not in CATEGORIES or not rights or not title.strip():
             raise HTTPException(422, "请填写标题、分类并确认作品授权")
-        if branch not in CATEGORIES[category]["branches"]:
+        if not valid_branch(category, branch):
             raise HTTPException(422, "请选择该部门下的有效分支")
         if not 1 <= len(files) <= 6:
             raise HTTPException(422, "每件作品需要 1 至 6 张图片")
@@ -453,7 +491,7 @@ def create_app(settings: Settings | None = None):
         where, params = ["1=1"], []
         if category and category not in CATEGORIES:
             raise HTTPException(422, "无效部门")
-        if branch and (not category or branch not in CATEGORIES[category]["branches"]):
+        if branch and not valid_branch(category, branch):
             raise HTTPException(422, "无效分支")
         if category:
             where.append("w.category=?")

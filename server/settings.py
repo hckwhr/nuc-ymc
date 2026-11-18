@@ -8,7 +8,7 @@ class Settings:
     environment: str = "production"
     data_dir: Path = Path("/data")
     secret: str = ""
-    owner_username: str = "hck_admin"
+    owner_username: str = "hck"
     origins: tuple[str, ...] = ("https://nuc-ymc.com", "https://api.nuc-ymc.com")
     oss_endpoint: str = "https://oss-cn-hongkong.aliyuncs.com"
     oss_bucket: str = ""
@@ -23,7 +23,7 @@ class Settings:
             environment=os.getenv("APP_ENV", "production"),
             data_dir=Path(os.getenv("DATA_DIR", "/data")),
             secret=os.getenv("APP_SECRET", ""),
-            owner_username=os.getenv("OWNER_USERNAME", "hck_admin").strip().lower(),
+            owner_username=os.getenv("OWNER_USERNAME", "hck").strip().lower(),
             origins=tuple(x.strip() for x in os.getenv("ALLOWED_ORIGINS", "https://nuc-ymc.com,https://api.nuc-ymc.com").split(",") if x.strip()),
             oss_endpoint=os.getenv("OSS_ENDPOINT", "https://oss-cn-hongkong.aliyuncs.com"),
             oss_bucket=os.getenv("OSS_BUCKET", ""), oss_key=os.getenv("OSS_ACCESS_KEY_ID", ""),

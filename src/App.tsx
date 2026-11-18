@@ -11,12 +11,28 @@ import General from "./pages/General";
 import Community, { Account, Privacy } from "./pages/Community";
 import Admin from "./pages/Admin";
 import { AuthProvider } from "./lib/community";
+import { CategoriesProvider } from "./lib/categories";
 
 /** 路由切换时回到顶部（首页带 hash 时不干扰锚点滚动）。 */
 function ScrollManager() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
     if (!hash) window.scrollTo({ top: 0 });
+    else {
+      let id: string;
+      try { id = decodeURIComponent(hash.slice(1)); } catch { return; }
+      const scroll = () => {
+        const target = document.getElementById(id);
+        if (!target) return false;
+        target.scrollIntoView({ block: "start" });
+        return true;
+      };
+      if (scroll()) return;
+      const observer = new MutationObserver(() => { if (scroll()) observer.disconnect(); });
+      observer.observe(document.body, { childList: true, subtree: true });
+      const timer = window.setTimeout(() => observer.disconnect(), 15000);
+      return () => { observer.disconnect(); clearTimeout(timer); };
+    }
   }, [pathname, hash]);
   return null;
 }
@@ -24,6 +40,7 @@ function ScrollManager() {
 export default function App() {
   return (
     <AuthProvider>
+      <CategoriesProvider>
       <ScrollManager />
       <Routes>
         <Route path="/community" element={<Community />} />
@@ -40,6 +57,7 @@ export default function App() {
         <Route path="/general" element={<General />} />
         <Route path="*" element={<Home />} />
       </Routes>
+      </CategoriesProvider>
     </AuthProvider>
   );
 }

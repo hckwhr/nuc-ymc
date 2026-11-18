@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { photographyCategories } from "../data/photographyCats";
 import { CategoryGallery } from "../lib/CategoryGallery";
+import { useDepartmentGallery } from "../components/PublishedWorks";
+import { useCategories } from "../lib/categories";
 import { Reveal } from "../lib/Reveal";
 import { Footer } from "../components/Footer";
 // 摄影部 Hero 专用字体（securify 参考用 Readex Pro，自托管拉丁子集，不走 Google）
@@ -51,6 +53,7 @@ function PillNav() {
 
 /** securify 风格全屏 Hero（保持暗色大屏） */
 function Hero() {
+  const { departments } = useCategories();
   return (
     <section className="relative h-[100svh] w-full overflow-hidden bg-black" style={READEX}>
       <video className="absolute inset-0 h-full w-full object-cover" autoPlay loop muted playsInline preload="auto" src={HERO_VIDEO} />
@@ -82,7 +85,7 @@ function Hero() {
         {/* 左下统计 */}
         <div className="absolute bottom-20 left-6 md:bottom-24 md:left-20">
           <div className="flex items-center gap-3">
-            <span className="text-4xl font-medium tracking-tight text-white md:text-5xl">{photographyCategories.length}</span>
+            <span className="text-4xl font-medium tracking-tight text-white md:text-5xl">{departments.photography.branches.length}</span>
             <span className="hidden h-px w-24 rotate-[-20deg] bg-white/40 md:block" />
           </div>
           <p className="mt-1 text-xs text-white/70 md:text-sm">主题分类</p>
@@ -102,6 +105,9 @@ function Hero() {
 }
 
 export default function Photography() {
+  const categories = useDepartmentGallery("photography", photographyCategories);
+  const { departments } = useCategories();
+  const published = Object.values(departments.photography.counts || {}).reduce((sum, count) => sum + count, 0);
   return (
     <div className="min-h-screen bg-background">
       <Hero />
@@ -118,16 +124,16 @@ export default function Photography() {
           脚下乾坤大，镜头囊天地。这里收录摄影部的全部作品，按主题分类，持续更新——城市、自然、飞行、星空、人物背影……记录属于每一个中北人的一年四季。点击任意一张查看大图。
         </Reveal>
         <Reveal as="p" delay={190} className="mt-3 text-sm text-soft/70">
-          按主题分组 · 共 {TOTAL} 张 · 点击查看大图
+          按主题分组 · 馆藏 {TOTAL} 张 · 公开投稿 {published} 件 · 点击查看大图
         </Reveal>
 
         {/* 分类快捷跳转 */}
         <Reveal delay={230}>
           <div id="cats" className="mt-6 flex flex-wrap gap-2">
-            {photographyCategories.map((c) => (
+            {categories.map((c) => (
               <a
                 key={c.name}
-                href={`#cat-${c.name}`}
+                href={`#cat-${encodeURIComponent(c.name)}`}
                 className="rounded-full border px-3.5 py-1.5 text-sm text-ink transition-colors"
                 style={{ borderColor: ACCENT + "55", background: ACCENT + "10" }}
               >
@@ -139,7 +145,7 @@ export default function Photography() {
       </section>
 
       <section id="gallery" className="mx-auto max-w-7xl px-6 pb-24">
-        <CategoryGallery categories={photographyCategories} accent={ACCENT} />
+        <CategoryGallery categories={categories} accent={ACCENT} department="photography" />
       </section>
 
       <Footer />

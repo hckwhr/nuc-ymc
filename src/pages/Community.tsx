@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, API, CONSENT, dateText, roleName, statusName, useAuth, type Page, type Work } from "../lib/community";
-import { SubmissionTree, DepartmentFilters, departments, type Department } from "../components/SubmissionTree";
+import { SubmissionTree, DepartmentFilters } from "../components/SubmissionTree";
+import { departmentNames as departments, type Department } from "../lib/categories";
 import { logoSrc } from "../data/media";
 import "../community.css";
 
@@ -32,6 +33,7 @@ export function WorkCard({ work, children }: { work: Work; children?: ReactNode 
     <div className="work-content"><div className="work-meta"><span>{departments[work.category as Department]?.name || work.category} · {work.branch || "其他"}</span><span className={`status ${work.status}`}>{statusName[work.status]}</span></div>
       <h2>{work.title}</h2><p className="muted">{work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
       {work.reason && <p className="notice">处理说明 · {work.reason}</p>}{children}</div>
+    {work.status === "approved" && <div className="work-public-links"><span>已公开展示</span><Link to="/#works">首页作品墙 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
     {expanded && <div className="image-dialog" role="dialog" aria-modal="true" aria-label={work.title} onKeyDown={e => { if (e.key === "Escape") setExpanded(false); }}>
       <button autoFocus className="dialog-close" onClick={() => setExpanded(false)}>关闭图片</button><div>{work.images.map(id => <img key={id} src={`${API}/api/images/${id}`} alt={work.title} />)}</div>
     </div>}
@@ -67,7 +69,7 @@ export function LoginForm() {
     try { await login(username, password, register); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <section className="login-panel"><div className="auth-tabs" aria-label="账号入口"><button type="button" aria-pressed={!register} onClick={() => { setParams({}); setError(""); }}>登录</button><button type="button" aria-pressed={register} onClick={() => { setParams({ mode: "register" }); setError(""); }}>注册账号</button></div><p className="eyebrow">欢迎加入</p><h1>{register ? "起一个属于你的用户名" : "欢迎回到创作空间"}</h1><p className="muted">{register ? "注册成功即可投稿，无需等待账号审核。" : "用注册时设置的用户名和密码登录。"}</p>
-    <form onSubmit={submit}><label>用户名<input autoComplete="username" required pattern="[a-zA-Z][a-zA-Z0-9_]{3,31}" maxLength={32} value={username} onChange={e => setUsername(e.target.value)} /><small>4 至 32 位，以字母开头，可含数字和下划线，不区分大小写。</small></label>
+    <form onSubmit={submit}><label>用户名<input autoComplete="username" required pattern="[a-zA-Z][a-zA-Z0-9_]{2,31}" maxLength={32} value={username} onChange={e => setUsername(e.target.value)} /><small>3 至 32 位，以字母开头，可含数字和下划线，不区分大小写。</small></label>
     <label>密码<input type="password" autoComplete={register ? "new-password" : "current-password"} required minLength={register ? 12 : 1} maxLength={128} value={password} onChange={e => setPassword(e.target.value)} />{register && <small>至少 12 个字符，建议使用独立的长密码。</small>}</label>
     {register && <label>确认密码<input type="password" autoComplete="new-password" required minLength={12} maxLength={128} value={confirm} onChange={e => setConfirm(e.target.value)} /></label>}
     {register && <label className="checkbox-label"><input type="checkbox" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>我已阅读并同意<Link to="/privacy" target="_blank">隐私说明与投稿规则</Link>。</span></label>}
