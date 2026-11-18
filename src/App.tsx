@@ -10,6 +10,8 @@ import WeChat from "./pages/WeChat";
 import General from "./pages/General";
 import Community, { Account, Privacy } from "./pages/Community";
 import Admin from "./pages/Admin";
+import WorkDetail from "./pages/WorkDetail";
+import Notifications from "./pages/Notifications";
 import { AuthProvider } from "./lib/community";
 import { CategoriesProvider } from "./lib/categories";
 
@@ -43,6 +45,8 @@ export default function App() {
       <CategoriesProvider>
       <ScrollManager />
       <Routes>
+        <Route path="/works/:id" element={<WorkDetail />} />
+        <Route path="/notifications" element={<Notifications />} />
         <Route path="/community" element={<Community />} />
         <Route path="/account" element={<Account />} />
         <Route path="/admin" element={<Admin />} />

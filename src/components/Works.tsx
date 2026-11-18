@@ -32,6 +32,7 @@ export function Works() {
         sub="摄影、设计与抖音部的共同创作，审核通过的新作品会在这里与你见面。"
       />
 
+      <div className="mb-10"><PublishedWorks featured /></div>
       <div className="mb-14"><PublishedWorks /></div>
       <h3 className="mb-6 text-xl text-ink">馆藏精选</h3>
       <Reveal>

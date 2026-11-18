@@ -63,6 +63,7 @@ def main():
         connection.execute("DELETE FROM limits WHERE resets<=?", (moment,))
         connection.execute("DELETE FROM login_events WHERE created_at<?", (cutoff,))
         connection.execute("DELETE FROM audit WHERE created_at<?", (cutoff,))
+        connection.execute("DELETE FROM notifications WHERE created_at<?", (cutoff,))
         connection.execute("DELETE FROM images WHERE purged=1 AND work_id IN (SELECT id FROM works WHERE status='deleted' AND updated_at<?)", (cutoff,))
         connection.execute("DELETE FROM works WHERE status='deleted' AND updated_at<? AND NOT EXISTS(SELECT 1 FROM images WHERE work_id=works.id)", (cutoff,))
     backups = settings.data_dir / "backups"

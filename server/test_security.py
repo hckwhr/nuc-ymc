@@ -141,6 +141,70 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
         db.close()
 
+    def test_details_featured_and_private_notifications(self):
+        owner, visitor = self.new_client(), self.new_client()
+        self.login(owner, 'hck', 'Owner-password-123')
+        author = self.register(self.client, 'creator1')
+        picture = io.BytesIO()
+        Image.new('RGB', (20, 20), 'blue').save(picture, 'PNG')
+        response = self.client.post('/api/works', data={'category': 'design', 'branch': '海报', 'title': '校园海报', 'rights': 'true'}, files={'files': ('photo.png', picture.getvalue(), 'image/png')})
+        self.assertEqual(response.status_code, 201)
+        work_id = response.json()['id']
+        detail = '/api/works/' + work_id
+        feature = '/api/admin/works/' + work_id + '/featured'
+        moderate = '/api/admin/works/' + work_id
+        self.assertEqual(visitor.get(detail).status_code, 404)
+        self.assertEqual(visitor.get('/api/notifications').status_code, 401)
+        self.assertEqual(self.client.patch(feature, json={'featured': True}).status_code, 403)
+        self.assertEqual(owner.patch(feature, json={'featured': True}).status_code, 409)
+        self.assertEqual(owner.patch(moderate, json={'status': 'approved'}).status_code, 200)
+        # Idempotent retries must not produce duplicate unread notifications.
+        owner.patch(moderate, json={'status': 'approved'})
+        self.assertEqual(self.client.get('/api/notifications/unread').json()['unread'], 1)
+        public = visitor.get(detail).json()
+        self.assertEqual(public['title'], '校园海报')
+        self.assertIsNotNone(public['published_at'])
+        for private in ('user_id', 'username', 'reason'):
+            self.assertNotIn(private, public)
+        self.assertEqual(owner.patch(feature, json={'featured': True}).status_code, 200)
+        self.assertTrue(visitor.get(detail).json()['featured'])
+        self.assertEqual(visitor.get('/api/works?featured=true').json()['total'], 1)
+        notification = self.client.get('/api/notifications').json()['items'][0]
+        read = f"/api/notifications/{notification['id']}/read"
+        self.assertEqual(owner.get('/api/notifications').json()['total'], 0)
+        self.assertEqual(owner.patch(read).status_code, 404)
+        self.assertEqual(self.client.patch(read, headers={'X-CSRF-Token': 'bad'}).status_code, 403)
+        self.assertEqual(self.client.patch(read).status_code, 200)
+        self.assertEqual(self.client.get('/api/notifications/unread').json()['unread'], 0)
+        owner.patch('/api/admin/users/' + author['id'] + '/disabled', json={'disabled': True})
+        self.assertEqual(visitor.get(detail).status_code, 404)
+        self.assertEqual(visitor.get('/api/works?featured=true').json()['total'], 0)
+        owner.patch('/api/admin/users/' + author['id'] + '/disabled', json={'disabled': False})
+        self.login(self.client, 'creator1', 'User-password-123')
+        owner.patch(moderate, json={'status': 'rejected', 'reason': '请补充版权说明'})
+        self.assertEqual(visitor.get(detail).status_code, 404)
+        self.assertEqual(visitor.get('/api/works?featured=true').json()['total'], 0)
+        notices = self.client.get('/api/notifications').json()
+        self.assertEqual(notices['total'], 2)
+        self.assertEqual(notices['items'][0]['reason'], '请补充版权说明')
+        owner.patch(moderate, json={'status': 'approved'})
+        self.assertFalse(visitor.get(detail).json()['featured'])
+        owner.patch(feature, json={'featured': True})
+        owner.patch(moderate, json={'status': 'deleted', 'reason': '清理测试'})
+        self.assertEqual(visitor.get(detail).status_code, 404)
+        self.assertEqual(self.client.get('/api/notifications').json()['items'][0]['status'], 'deleted')
+        with self.app.state.db(write=True) as db:
+            for index in range(13):
+                db.execute("INSERT INTO works VALUES(?,?,?,'','design','approved','',1,1,'海报')", (f'featured-{index}', author['id'], f'作品{index}'))
+        for index in range(12):
+            self.assertEqual(owner.patch(f'/api/admin/works/featured-{index}/featured', json={'featured': True}).status_code, 200)
+        self.assertEqual(owner.patch('/api/admin/works/featured-12/featured', json={'featured': True}).status_code, 409)
+        owner.patch('/api/admin/works/featured-0/featured', json={'featured': False})
+        self.assertEqual(owner.patch('/api/admin/works/featured-12/featured', json={'featured': True}).status_code, 200)
+        self.assertEqual(self.client.delete('/api/works/featured-12').status_code, 200)
+        self.assertEqual(visitor.get('/api/works?featured=true').json()['total'], 11)
+        owner.close(); visitor.close()
+
     def test_dynamic_branches_and_public_visibility(self):
         visitor = self.new_client()
         owner = self.new_client()

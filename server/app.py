@@ -60,6 +60,10 @@ class BranchRequest(BaseModel):
     name: str = Field(min_length=1, max_length=30)
 
 
+class FeaturedRequest(BaseModel):
+    featured: bool
+
+
 def create_app(settings: Settings | None = None):
     settings = settings or Settings.from_env()
     settings.validate()
@@ -311,6 +315,7 @@ def create_app(settings: Settings | None = None):
 
     def serialize_work(connection, row, private=False):
         result = dict(row)
+        result["featured"] = connection.execute("SELECT 1 FROM featured_works WHERE work_id=?", (row["id"],)).fetchone() is not None
         if not private:
             for field in ("username", "reason", "user_id"):
                 result.pop(field, None)
@@ -318,15 +323,16 @@ def create_app(settings: Settings | None = None):
             "SELECT id FROM images WHERE work_id=? AND purged=0 ORDER BY position", (row["id"],))]
         return result
 
-    def list_works(connection, where, params, page, private):
+    def list_works(connection, where, params, page, private, featured=False):
         count = connection.execute("SELECT COUNT(*) FROM works w JOIN users u ON u.id=w.user_id WHERE " + where, params).fetchone()[0]
         rows = connection.execute(
             "SELECT w.*,u.nickname,u.username FROM works w JOIN users u ON u.id=w.user_id WHERE " + where +
-            " ORDER BY w.created_at DESC,w.id LIMIT 24 OFFSET ?", (*params, (page - 1) * 24)).fetchall()
+            (" ORDER BY (SELECT selected_at FROM featured_works WHERE work_id=w.id) DESC,w.id LIMIT 24 OFFSET ?" if featured else
+             " ORDER BY w.created_at DESC,w.id LIMIT 24 OFFSET ?"), (*params, (page - 1) * 24)).fetchall()
         return {"items": [serialize_work(connection, row, private) for row in rows], "total": count, "page": page}
 
     @app.get("/api/works")
-    def works(page: int = 1, category: str = "", branch: str = ""):
+    def works(page: int = 1, category: str = "", branch: str = "", featured: bool = False):
         if page < 1 or page > 100000 or (category and category not in CATEGORIES):
             raise HTTPException(422, "无效筛选条件")
         if branch and not valid_branch(category, branch):
@@ -336,8 +342,43 @@ def create_app(settings: Settings | None = None):
             where, params = where + " AND w.category=?", (category,)
         if branch:
             where, params = where + " AND w.branch=?", (*params, branch)
+        if featured:
+            where += " AND EXISTS(SELECT 1 FROM featured_works WHERE work_id=w.id)"
         with db() as connection:
-            return list_works(connection, where, params, page, False)
+            return list_works(connection, where, params, page, False, featured)
+
+    @app.get("/api/works/{work_id}")
+    def work_detail(work_id: str):
+        with db() as connection:
+            row = connection.execute("SELECT w.*,u.nickname FROM works w JOIN users u ON u.id=w.user_id "
+                                     "WHERE w.id=? AND w.status='approved' AND u.disabled=0", (work_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "作品不存在或暂未公开")
+            result = serialize_work(connection, row)
+            result["published_at"] = connection.execute("SELECT MAX(created_at) FROM audit WHERE target_id=? AND action='approved'", (work_id,)).fetchone()[0]
+            return result
+
+    @app.get("/api/notifications/unread")
+    def unread_notifications(user=Depends(current_user)):
+        with db() as connection:
+            return {"unread": connection.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL", (user["id"],)).fetchone()[0]}
+
+    @app.get("/api/notifications")
+    def notifications(page: int = 1, user=Depends(current_user)):
+        if page < 1 or page > 100000:
+            raise HTTPException(422, "无效页码")
+        with db() as connection:
+            total = connection.execute("SELECT COUNT(*) FROM notifications WHERE user_id=?", (user["id"],)).fetchone()[0]
+            rows = connection.execute("SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 24 OFFSET ?", (user["id"], (page - 1) * 24)).fetchall()
+            return {"items": [{key: row[key] for key in ("id", "work_id", "title", "status", "reason", "created_at", "read_at")} for row in rows], "total": total, "page": page}
+
+    @app.patch("/api/notifications/{notification_id}/read")
+    def read_notification(notification_id: int, user=Depends(current_user)):
+        with db(write=True) as connection:
+            result = connection.execute("UPDATE notifications SET read_at=COALESCE(read_at,?) WHERE id=? AND user_id=?", (now(), notification_id, user["id"]))
+            if not result.rowcount:
+                raise HTTPException(404, "通知不存在")
+        return {"ok": True}
 
     @app.get("/api/my/works")
     def my_works(page: int = 1, user=Depends(current_user)):
@@ -431,6 +472,7 @@ def create_app(settings: Settings | None = None):
             if not work:
                 raise HTTPException(404, "作品不存在")
             if work["status"] != "deleted":
+                connection.execute("DELETE FROM featured_works WHERE work_id=?", (work_id,))
                 connection.execute("UPDATE works SET status='deleted',reason='作者删除',updated_at=? WHERE id=?", (now(), work_id))
                 audit(connection, user["id"], "delete_own", work_id, work["title"])
         return {"ok": True}
@@ -508,6 +550,26 @@ def create_app(settings: Settings | None = None):
         with db() as connection:
             return list_works(connection, " AND ".join(where), tuple(params), page, True)
 
+    @app.patch("/api/admin/works/{work_id}/featured")
+    def feature_work(work_id: str, body: FeaturedRequest, user=Depends(administrator)):
+        with db(write=True) as connection:
+            work = connection.execute("SELECT w.*,u.disabled FROM works w JOIN users u ON u.id=w.user_id WHERE w.id=?", (work_id,)).fetchone()
+            if not work:
+                raise HTTPException(404, "作品不存在")
+            if body.featured:
+                if work["status"] != "approved" or work["disabled"]:
+                    raise HTTPException(409, "仅可精选正常账号的公开作品")
+                if connection.execute("SELECT 1 FROM featured_works WHERE work_id=?", (work_id,)).fetchone():
+                    return {"ok": True}
+                if connection.execute("SELECT COUNT(*) FROM featured_works").fetchone()[0] >= 12:
+                    raise HTTPException(409, "首页最多精选 12 件作品，请先取消其他精选")
+                connection.execute("INSERT INTO featured_works VALUES(?,?)", (work_id, now()))
+            else:
+                if not connection.execute("DELETE FROM featured_works WHERE work_id=?", (work_id,)).rowcount:
+                    return {"ok": True}
+            audit(connection, user["id"], "feature" if body.featured else "unfeature", work_id, work["title"])
+        return {"ok": True}
+
     @app.patch("/api/admin/works/{work_id}")
     def moderate(work_id: str, body: ModerationRequest, user=Depends(administrator)):
         if body.status in {"rejected", "deleted"} and not body.reason.strip():
@@ -518,7 +580,13 @@ def create_app(settings: Settings | None = None):
                 raise HTTPException(404, "作品不存在")
             if work["status"] == "deleted":
                 raise HTTPException(409, "作品已经删除")
+            if work["status"] == body.status and work["reason"] == body.reason.strip():
+                return {"ok": True}
+            if body.status != "approved":
+                connection.execute("DELETE FROM featured_works WHERE work_id=?", (work_id,))
             connection.execute("UPDATE works SET status=?,reason=?,updated_at=? WHERE id=?", (body.status, body.reason.strip(), now(), work_id))
+            connection.execute("INSERT INTO notifications(user_id,work_id,title,status,reason,created_at) VALUES(?,?,?,?,?,?)",
+                               (work["user_id"], work_id, work["title"], body.status, body.reason.strip(), now()))
             audit(connection, user["id"], body.status, work_id, json.dumps({"title": work["title"], "reason": body.reason.strip()}, ensure_ascii=False))
         return {"ok": True}
 

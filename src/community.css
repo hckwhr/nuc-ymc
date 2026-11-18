@@ -1,6 +1,24 @@
 .community-shell { min-height: 100vh; background: #FAFAF7; color: #1A1A1A; }
 .community-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; padding: 22px max(24px, calc((100vw - 1240px) / 2)); background: #FFFFFF; border-bottom: 1px solid #ECE9E1; }
 .community-brand { font-weight: 700; font-size: 21px; }
+.notification-link { display: inline-flex; align-items: center; gap: 5px; }
+.notification-count { background: #9b4934; color: white; border-radius: 999px; min-width: 19px; padding: 1px 5px; text-align: center; font-size: 11px; }
+.detail-back { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-size: 14px; color: #6f6f6f; margin-bottom: 40px; }
+.work-detail { max-width: 980px; margin: auto; }
+.work-detail-heading { max-width: 760px; margin-bottom: 36px; }
+.work-detail-heading h1 { overflow-wrap: anywhere; }
+.featured-badge { display: inline-block; margin-left: 12px; background: #fff0ea; color: #9b4934; border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+.work-story { margin: 30px 0 40px; padding: 24px; border-left: 2px solid #ff7a59; background: #fff; }
+.work-story p { white-space: pre-wrap; }
+.work-detail-images { display: grid; gap: 30px; }
+.community-shell .detail-image-button { display: block; padding: 0; border: 0; width: 100%; overflow: hidden; border-radius: 18px; background: #f2efe9; }
+.detail-image-button img { width: 100%; max-height: 85vh; object-fit: contain; }
+.work-detail-images figcaption { text-align: right; color: #6f6f6f; font-size: 12px; margin-top: 10px; }
+.detail-credit { margin: 40px 0; color: #6f6f6f; font-size: 13px; }
+.notification-list { display: grid; gap: 18px; max-width: 850px; }
+.notification-card { padding: 26px; border: 1px solid #ece9e1; border-radius: 18px; background: #fff; overflow-wrap: anywhere; }
+.notification-card.unread { border-left: 3px solid #ff7a59; background: #fffdfa; }
+.notification-heading { display: flex; justify-content: space-between; gap: 15px; font-size: 12px; margin-bottom: 16px; }
 .community-header nav { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; font-size: 14px; }
 .community-header { gap: 18px 24px; }
 .community-header .community-home-nav { gap: 18px; }

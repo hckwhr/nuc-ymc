@@ -37,3 +37,13 @@ CREATE INDEX IF NOT EXISTS works_user ON works(user_id, created_at);
 CREATE INDEX IF NOT EXISTS works_status ON works(status, created_at);
 CREATE INDEX IF NOT EXISTS logins_user ON login_events(user_id, created_at);
 CREATE INDEX IF NOT EXISTS audit_date ON audit(created_at);
+CREATE TABLE IF NOT EXISTS featured_works (
+ work_id TEXT PRIMARY KEY REFERENCES works(id) ON DELETE CASCADE,
+ selected_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notifications (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL REFERENCES users(id),
+ work_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL,
+ reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, read_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS notifications_user ON notifications(user_id, id);

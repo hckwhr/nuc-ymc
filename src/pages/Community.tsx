@@ -5,6 +5,7 @@ import { SubmissionTree, DepartmentFilters } from "../components/SubmissionTree"
 import { departmentNames as departments, type Department } from "../lib/categories";
 import { logoSrc } from "../data/media";
 import "../community.css";
+import { NotificationLink } from "../components/NotificationLink";
 
 export function CommunityLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -19,6 +20,7 @@ export function CommunityLayout({ children }: { children: ReactNode }) {
       <Link to="/community">作品社区</Link><Link to="/account">{user ? "投稿 / 我的作品" : "登录"}</Link>
       {!user && <Link className="header-register" to="/account?mode=register">注册账号</Link>}
       {user && <span className="header-identity">@{user.username}</span>}
+      <NotificationLink />
       {user && user.role !== "user" && <Link to="/admin">管理后台</Link>}
       {user && <button onClick={() => void logout().catch(e => setError(e.message))}>退出登录</button>}
     </nav></header>
@@ -38,7 +40,7 @@ export function WorkCard({ work, children }: { work: Work; children?: ReactNode 
     <div className="work-content"><div className="work-meta"><span>{departments[work.category as Department]?.name || work.category} · {work.branch || "其他"}</span><span className={`status ${work.status}`}>{statusName[work.status]}</span></div>
       <h2>{work.title}</h2><p className="muted">{work.nickname}{work.username && ` · ${work.username}`}</p><p>{work.description}</p><small>{dateText(work.created_at)}</small>
       {work.reason && <p className="notice">处理说明 · {work.reason}</p>}{children}</div>
-    {work.status === "approved" && <div className="work-public-links"><span>已公开展示</span><Link to="/#works">首页作品墙 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
+    {work.status === "approved" && <div className="work-public-links"><span>{work.featured ? "编辑精选 · 已公开展示" : "已公开展示"}</span><Link to={`/works/${work.id}`}>作品详情 / 分享 ↗</Link><Link to="/#works">首页作品墙 ↗</Link><Link to={`/${work.category}#cat-${encodeURIComponent(work.branch || "其他")}`}>部门分支 ↗</Link></div>}
     {expanded && <div className="image-dialog" role="dialog" aria-modal="true" aria-label={work.title} onKeyDown={e => { if (e.key === "Escape") setExpanded(false); }}>
       <button autoFocus className="dialog-close" onClick={() => setExpanded(false)}>关闭图片</button><div>{work.images.map(id => <img key={id} src={`${API}/api/images/${id}`} alt={work.title} />)}</div>
     </div>}
